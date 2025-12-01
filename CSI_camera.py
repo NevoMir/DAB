@@ -33,6 +33,10 @@ class CameraStream:
             self.thread.start()
             print(f"Camera {self.camera_num} started.")
             return True
+        except IndexError:
+            print(f"Failed to start Camera {self.camera_num}: Camera not found (IndexError). Check connection.")
+            self.picam2 = None
+            return False
         except Exception as e:
             print(f"Failed to start Camera {self.camera_num}: {e}")
             self.picam2 = None
