@@ -1,0 +1,11 @@
+# Web Framework
+flask
+
+# Computer Vision
+opencv-python
+
+# Note for Raspberry Pi 5 CSI Cameras:
+# 'picamera2' is required for CSI_camera.py.
+# It is NOT available via pip. You must install it via apt:
+# sudo apt install python3-picamera2
+# And ensure your virtual environment was created with --system-site-packages
