@@ -4,7 +4,7 @@ import time
 
 # Configuration
 pixel_pin = board.D18  # This is GPIO 18
-num_pixels = 20        # Change this to the number of LEDs on your ring
+num_pixels = 32       # Change this to the number of LEDs on your ring
 ORDER = neopixel.GRB   # Most rings use Green-Red-Blue ordering
 
 pixels = neopixel.NeoPixel(
