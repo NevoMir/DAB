@@ -11,7 +11,7 @@ import time
 #     pixel_pin, num_pixels, brightness=0.2, auto_write=False, pixel_order=ORDER
 # )
 
-pixels = neopixel.NeoPixel(board.D18, 119, auto_write=False)
+pixels = neopixel.NeoPixel(board.D12, 120, auto_write=False)
 
 while True:
     # Make them all White
