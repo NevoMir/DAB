@@ -13,7 +13,8 @@ import time
 
 pixels = neopixel.NeoPixel(board.D18, 60, auto_write=False)
 
-for i in range(60):
-    pixels.fill((0, 0, 0))
-    pixels[i] = (255, 0, 0)
+while True:
+    # Make them all White
+    pixels.fill((255, 255, 255))
     pixels.show()
+    time.sleep(1)
