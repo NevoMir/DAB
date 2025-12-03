@@ -4,7 +4,7 @@ import time
 
 # Configuration
 pixel_pin = board.D18  # This is GPIO 18
-num_pixels = 32       # Change this to the number of LEDs on your ring
+num_pixels = 5       # Change this to the number of LEDs on your ring
 ORDER = neopixel.GRB   # Most rings use Green-Red-Blue ordering
 
 pixels = neopixel.NeoPixel(
@@ -24,5 +24,10 @@ while True:
 
     # Make them Blue
     pixels.fill((0, 0, 255))
+    pixels.show()
+    time.sleep(1)
+
+    # Make them White
+    pixels.fill((255, 255, 255))
     pixels.show()
     time.sleep(1)
