@@ -7,7 +7,7 @@ import time
 # -----------------------------
 pixel_pin = board.D12      # GPIO 12 pour la LED band
 num_pixels = 60            # Mets ici le nombre de LEDs de ta bande
-ORDER = neopixel.GRB       # SK6812 RGB (sans blanc)
+ORDER = neopixel.GRBW       # SK6812 RGB (sans blanc)
 
 pixels = neopixel.NeoPixel(
     pixel_pin,
