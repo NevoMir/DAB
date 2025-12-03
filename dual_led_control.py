@@ -14,8 +14,8 @@ ORDER_2 = neopixel.GRB
 
 # Initialize both strips
 # auto_write=False is recommended for better timing control
-pixels_1 = neopixel.NeoPixel(PIN_1, NUM_PIXELS_1, brightness=0.2, auto_write=False, pixel_order=ORDER_1)
-pixels_2 = neopixel.NeoPixel(PIN_2, NUM_PIXELS_2, brightness=0.2, auto_write=False, pixel_order=ORDER_2)
+pixels_1 = neopixel.NeoPixel(PIN_1, NUM_PIXELS_1, brightness=1, auto_write=False, pixel_order=ORDER_1)
+pixels_2 = neopixel.NeoPixel(PIN_2, NUM_PIXELS_2, brightness=1, auto_write=False, pixel_order=ORDER_2)
 
 print("Starting Dual LED Control...")
 
