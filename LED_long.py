@@ -2,36 +2,20 @@ import board
 import neopixel
 import time
 
-# -----------------------------
-# Configuration
-# -----------------------------
-pixel_pin = board.D12      # GPIO 12 pour la LED band
-num_pixels = 60            # Mets ici le nombre de LEDs de ta bande
-ORDER = neopixel.GRBW       # SK6812 RGB (sans blanc)
+pixel_pin = board.D12      # GPIO12 (pin physique 32)
+num_pixels = 10            # peu importe, 10 suffit pour tester
 
 pixels = neopixel.NeoPixel(
     pixel_pin,
     num_pixels,
     brightness=0.3,
-    auto_write=False,
-    pixel_order=ORDER
+    auto_write=True,
+    pixel_order=neopixel.GRB
 )
 
-# -----------------------------
-# Boucle principale
-# -----------------------------
 while True:
-    # Rouge
-    pixels.fill((255, 0, 0))
-    pixels.show()
+    pixels[0] = (255, 0, 0)   # première LED en rouge
+    time.sleep(1)
+    pixels[0] = (0, 0, 0)     # éteinte
     time.sleep(1)
 
-    # Vert
-    pixels.fill((0, 255, 0))
-    pixels.show()
-    time.sleep(1)
-
-    # Bleu
-    pixels.fill((0, 0, 255))
-    pixels.show()
-    time.sleep(1)
