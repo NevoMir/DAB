@@ -49,32 +49,23 @@ class CameraStream:
             return False
 
     def _update(self):
-        print(f"DEBUG: Camera {self.camera_num} capture loop started.")
-        frame_count = 0
-        last_log_time = time.time()
-
         while self.running:
             try:
                 # capture_array returns the image as a numpy array
                 image = self.picam2.capture_array()
                 
                 if image is not None:
-                    # Convert XRGB/RGBA to BGR for OpenCV/JPEG encoding
+                    # Picamera2 XRGB8888 is actually BGRX (BGRA)
+                    # OpenCV expects BGR.
                     if image.shape[2] == 4:
-                        frame = cv2.cvtColor(image, cv2.COLOR_RGBA2BGR)
+                        # Drop alpha channel, keep BGR order
+                        frame = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
                     else:
+                        # Fallback if format changes
                         frame = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
                     
                     with self.lock:
                         self.frame = frame
-
-                    frame_count += 1
-                    if time.time() - last_log_time > 5.0:
-                        print(f"DEBUG: Camera {self.camera_num} captured {frame_count} frames in last 5s. Mean brightness: {frame.mean():.2f}")
-                        last_log_time = time.time()
-                        frame_count = 0
-                else:
-                    print(f"DEBUG: Camera {self.camera_num} capture_array returned None")
                         
             except Exception as e:
                 print(f"Error reading from Camera {self.camera_num}: {e}")
@@ -99,10 +90,6 @@ def generate_frames(camera_num):
     cam = cameras.get(camera_num)
     if not cam:
         return
-
-    print(f"DEBUG: Starting frame generator for Camera {camera_num}")
-    frames_yielded = 0
-    last_yield_log = time.time()
 
     while True:
         frame = cam.get_frame()
