@@ -9,3 +9,5 @@ opencv-python
 # It is NOT available via pip. You must install it via apt:
 # sudo apt install python3-picamera2
 # And ensure your virtual environment was created with --system-site-packages
+# Servo Control
+adafruit-circuitpython-servokit
