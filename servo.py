@@ -23,9 +23,13 @@ try:
         kit.servo[0].angle = 90
         time.sleep(3)
 
+        print("0 degrees")
+        kit.servo[0].angle = 0
+        time.sleep(3)
+
         # Move to 180 degrees
-        print("359 degrees")
-        kit.servo[0].angle = 359
+        print("180 degrees")
+        kit.servo[0].angle = 180
         time.sleep(3)
 
 except KeyboardInterrupt:
