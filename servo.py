@@ -16,17 +16,17 @@ try:
         # Move to 0 degrees
         print("0 degrees")
         kit.servo[0].angle = 0
-        time.sleep(1)
+        time.sleep(3)
         
         # Move to 90 degrees
         print("90 degrees")
         kit.servo[0].angle = 90
-        time.sleep(1)
+        time.sleep(3)
 
         # Move to 180 degrees
         print("180 degrees")
         kit.servo[0].angle = 180
-        time.sleep(1)
+        time.sleep(3)
 
 except KeyboardInterrupt:
     # Turn off the servo signal on exit to stop jitter
