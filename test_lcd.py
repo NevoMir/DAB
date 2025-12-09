@@ -7,17 +7,15 @@ def main():
     try:
         # Initialize
         lcd = RGB1602(16, 2)
-        print("Success! Initialized.")
 
         # Test Colors
-        print("Testing Colors (Red -> Green -> Blue)...")
+        print("Hello! Start by pressing the button")
         lcd.setRGB(255, 0, 0)
-        lcd.print("Color: RED")
         time.sleep(1)
         
         lcd.setRGB(0, 255, 0)
-        lcd.setCursor(0, 0) # Move to start
-        lcd.print("Color: GREEN") # Overwrite
+        lcd.setCursor(0, 1) # Move to start
+        lcd.print("Color: GREEN") 
         time.sleep(1)
         
         lcd.setRGB(127, 0, 255)
