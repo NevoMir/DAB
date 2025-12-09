@@ -10,7 +10,11 @@ def main():
 
         # Test Colors
         lcd.setCursor(0, 0)
-        print("Hello! Start by pressing the button")
+        lcd.print("Hello! Start by")
+        lcd.setCursor(0, 1)
+        lcd.print("pressing the button")
+        time.sleep(3)
+        
         lcd.setRGB(255, 0, 0)
         time.sleep(1)
         
