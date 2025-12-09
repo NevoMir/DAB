@@ -12,29 +12,29 @@ def main():
         # Test Colors
         print("Testing Colors (Red -> Green -> Blue)...")
         lcd.setRGB(255, 0, 0)
-        lcd.print("Color: RED as the love I have for you")
+        lcd.print("Color: RED")
         time.sleep(1)
         
-        # lcd.setRGB(0, 255, 0)
-        # lcd.setCursor(0, 0) # Move to start
-        # lcd.print("Color: GREEN") # Overwrite
-        # time.sleep(1)
+        lcd.setRGB(0, 255, 0)
+        lcd.setCursor(0, 0) # Move to start
+        lcd.print("Color: GREEN") # Overwrite
+        time.sleep(1)
         
-        # lcd.setRGB(0, 0, 255)
-        # lcd.setCursor(0, 0)
-        # lcd.print("Color: BLUE ")
-        # time.sleep(1)
+        lcd.setRGB(0, 0, 255)
+        lcd.setCursor(0, 0)
+        lcd.print("Color: BLUE ")
+        time.sleep(1)
         
-        # # Test Text
-        # print("Testing Text...")
-        # lcd.setRGB(255, 255, 255) # White
-        # lcd.clear()
+        # Test Text
+        print("Testing Text...")
+        lcd.setRGB(255, 255, 255) # White
+        lcd.clear()
         
         lcd.setCursor(0, 0)
-        lcd.print("Hello Sophie!")
+        lcd.print("Hello Nevo!")
         
         lcd.setCursor(0, 1) # Second line
-        lcd.print("I love you!")
+        lcd.print("It Works! :)")
         
         time.sleep(3)
         
