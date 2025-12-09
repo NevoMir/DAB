@@ -9,6 +9,7 @@ def main():
         lcd = RGB1602(16, 2)
 
         # Test Colors
+        lcd.setCursor(0, 0)
         print("Hello! Start by pressing the button")
         lcd.setRGB(255, 0, 0)
         time.sleep(1)
