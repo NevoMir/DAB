@@ -1,54 +1,51 @@
 import time
-from RPLCD.i2c import CharLCD
-
-# Common I2C addresses for LCDs are 0x27 or 0x3F
-# Run 'i2cdetect -y 1' on your Pi to confirm
-I2C_ADDR = 0x27 
+from rgb1602 import RGB1602
 
 def main():
-    print(f"Attempting to connect to LCD at {hex(I2C_ADDR)}...")
+    print("Attempting to connect to RGB LCD (0x3E/0x60)...")
     
     try:
-        # Initialize the LCD
-        # port=1 corresponds to /dev/i2c-1 (Standard on Pi)
-        lcd = CharLCD(i2c_expander='PCF8574', address=I2C_ADDR, port=1,
-                      cols=16, rows=2, dotsize=8,
-                      charmap='A00',
-                      auto_linebreaks=True,
-                      backlight_enabled=True)
+        # Initialize
+        lcd = RGB1602(16, 2)
+        print("Success! Initialized.")
+
+        # Test Colors
+        print("Testing Colors (Red -> Green -> Blue)...")
+        lcd.setRGB(255, 0, 0)
+        lcd.print("Color: RED")
+        time.sleep(1)
         
-        print("Success! Writing to display...")
+        lcd.setRGB(0, 255, 0)
+        lcd.setCursor(0, 0) # Move to start
+        lcd.print("Color: GREEN") # Overwrite
+        time.sleep(1)
         
-        # Step 1: Basic String
+        lcd.setRGB(0, 0, 255)
+        lcd.setCursor(0, 0)
+        lcd.print("Color: BLUE ")
+        time.sleep(1)
+        
+        # Test Text
+        print("Testing Text...")
+        lcd.setRGB(255, 255, 255) # White
         lcd.clear()
-        lcd.write_string('Hello, World!')
-        lcd.crlf() # Carriage return + Line feed
-        lcd.write_string('It works!')
+        
+        lcd.setCursor(0, 0)
+        lcd.print("Hello Nevo!")
+        
+        lcd.setCursor(0, 1) # Second line
+        lcd.print("It Works! :)")
+        
         time.sleep(3)
         
-        # Step 2: Backlight Blink
-        print("Blinking backlight...")
-        for _ in range(3):
-            lcd.backlight_enabled = False
-            time.sleep(0.5)
-            lcd.backlight_enabled = True
-            time.sleep(0.5)
-            
-        # Step 3: Clear and cleanup
         lcd.clear()
-        lcd.write_string('Test Complete')
-        time.sleep(2)
-        lcd.clear()
-        # lcd.close(clear=True) # Optional closing
-        print("Test Complete.")
-        
-    except OSError as e:
-        print(f"Error: Could not connect to LCD at {hex(I2C_ADDR)}.")
-        print("1. Check wiring (SDA to Pin 3, SCL to Pin 5, VCC to 5V, GND to GND)")
-        print("2. Check address with 'i2cdetect -y 1'")
-        print(f"3. System Error: {e}")
+        lcd.print("Done.")
+        time.sleep(1)
+        # lcd.close() # Optional: turn off
+
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        print(f"Error: {e}")
+        print("Ensure 'smbus2' is installed: pip install smbus2")
 
 if __name__ == "__main__":
     main()
