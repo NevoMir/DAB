@@ -30,7 +30,7 @@ def main():
         
         # Test Text
         print("Testing Text...")
-        lcd.setRGB(255, 255, 255) # White
+        lcd.setRGB(255, 255, 0) # White
         lcd.clear()
         
         lcd.setCursor(0, 0)
