@@ -14,11 +14,16 @@ def main():
         lcd.print("Hello! Press to")
         lcd.setCursor(0, 1)
         lcd.print("start -->")
+        time.sleep(4)
+
+        lcd.setRGB(127, 127, 127)
         time.sleep(6)
 
         lcd.setRGB(255, 255, 255)
-        time.sleep(6)
+        time.sleep(4)
         
+
+
         lcd.clear()
         lcd.print("Done.")
         time.sleep(1)
