@@ -5,3 +5,4 @@ GPIO.setup(4, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 while True:
     if GPIO.input(4) == GPIO.HIGH:
         print("Button Pressed")
+    time.sleep(0.1)
