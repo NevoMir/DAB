@@ -20,9 +20,9 @@ def main():
         lcd.print("Color: GREEN") # Overwrite
         time.sleep(1)
         
-        lcd.setRGB(0, 0, 255)
+        lcd.setRGB(127, 0, 255)
         lcd.setCursor(0, 0)
-        lcd.print("Color: BLUE ")
+        lcd.print("Color: VIOLET ")
         time.sleep(1)
         
         # Test Text
