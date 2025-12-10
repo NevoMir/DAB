@@ -56,18 +56,18 @@ try:
     while True:
         # Move from 0 to 180 degrees over 3 seconds
         print("Moving to 180 degrees smoothly (3 seconds)...")
-        move_smoothly(my_servo, 0, 180, 3.0)
+        move_smoothly(my_servo, 0, 180, 4.0)
         time.sleep(1)
         
         # Move from 180 to 90 degrees over 2 seconds
-        print("Moving to 90 degrees smoothly (2 seconds)...")
-        move_smoothly(my_servo, 180, 90, 2.0)
+        print("Moving to 0 degrees smoothly (2 seconds)...")
+        move_smoothly(my_servo, 180, 0, 5.0)
         time.sleep(1)
         
-        # Move from 90 to 0 degrees over 0.5 seconds (faster)
-        print("Moving to 0 degrees smoothly (0.5 seconds)...")
-        move_smoothly(my_servo, 90, 0, 0.5)
-        time.sleep(1)
+        # # Move from 90 to 0 degrees over 0.5 seconds (faster)
+        # print("Moving to 0 degrees smoothly (0.5 seconds)...")
+        # move_smoothly(my_servo, 90, 0, 0.5)
+        # time.sleep(1)
 
 except KeyboardInterrupt:
     print("\nExiting")
