@@ -14,6 +14,11 @@ except ImportError:
     print("Warning: flask library not found. Web/local network streaming will be disabled.")
     FLASK_AVAILABLE = False
 
+# HACK: Auto-set DISPLAY for SSH users if not set
+if "DISPLAY" not in os.environ:
+    print("DISPLAY not set. Setting to ':0' to target local screen...")
+    os.environ["DISPLAY"] = ":0"
+
 # ==========================================
 # PART 1: USB Camera Class & Web Streaming
 # ==========================================
@@ -32,7 +37,8 @@ class USBCameraStream:
     def start(self):
         try:
             print(f"Initializing USB Camera at index {self.camera_index}...")
-            self.cap = cv2.VideoCapture(self.camera_index)
+            # Enforce V4L2 backend to avoid GStreamer errors on Pi
+            self.cap = cv2.VideoCapture(self.camera_index, cv2.CAP_V4L2)
             
             if not self.cap.isOpened():
                 print(f"Failed to open USB Camera at index {self.camera_index}")
