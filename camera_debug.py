@@ -75,7 +75,7 @@ if __name__ == "__main__":
     
     # Check libcamera-hello list
     print("\n[Step 1] Checking available cameras with libcamera-hello:")
-    run_command("libcamera-hello --list-cameras")
+    run_command("rpicam-hello --list-cameras")
     
     # Test Python capture for both potential slots
     print("\n[Step 2] Testing Python Access")
