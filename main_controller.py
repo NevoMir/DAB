@@ -11,16 +11,75 @@ from gpiozero import Button
 from adafruit_servokit import ServoKit
 from rgb1602 import RGB1602
 
-# Import User's Camera Classes
-try:
-    from USB_camera import USBCameraStream
-except ImportError:
-    print("Error: Could not import USBCameraStream")
-
+# Import CSI Camera Class (Keep this as it seems to work for CSI)
 try:
     from CSI_camera import CameraStream as CSICameraStream
 except ImportError:
     print("Error: Could not import CameraStream (CSI)")
+
+# REDEFINE USB CAMERA CLASS LOCALLY
+# This allows us to add custom error handling (suppress spam) without modifying the user's original file.
+class USBCameraStream:
+    def __init__(self, camera_index):
+        self.camera_index = camera_index
+        self.cap = None
+        self.running = False
+        self.thread = None
+        self.frame = None
+        self.lock = threading.Lock()
+        self.error_count = 0 
+
+    def start(self):
+        try:
+            self.cap = cv2.VideoCapture(self.camera_index)
+            if not self.cap.isOpened():
+                return False
+            # Try to read one frame to ensure it's real
+            ret, _ = self.cap.read()
+            if not ret:
+                return False
+                
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            self.running = True
+            self.thread = threading.Thread(target=self._update, daemon=True)
+            self.thread.start()
+            return True
+        except Exception as e:
+            # print(f"Error starting USB Camera {self.camera_index}: {e}")
+            return False
+
+    def _update(self):
+        while self.running and self.cap.isOpened():
+            try:
+                ret, frame = self.cap.read()
+                if ret:
+                    with self.lock:
+                        self.frame = frame
+                    self.error_count = 0 # Reset error count on success
+                else:
+                    self.error_count += 1
+                    # Only print the error once every 100 failures to avoid spam
+                    if self.error_count % 100 == 1:
+                         print(f"Warning: USB Camera {self.camera_index} failed to read frame (Count: {self.error_count})")
+                    time.sleep(0.1)
+                    
+                    # Optional: Stop if too many errors?
+                    # if self.error_count > 500: self.running = False
+            except Exception:
+                time.sleep(0.1)
+
+    def get_frame(self):
+        with self.lock:
+            return self.frame
+
+    def stop(self):
+        self.running = False
+        if self.thread:
+            self.thread.join()
+        if self.cap:
+            self.cap.release()
+
 
 # ==============================================================================
 # GLOBAL CONFIGURATION
@@ -213,7 +272,7 @@ def main():
     try:
         lcd = RGB1602(16, 2)
         lcd.setRGB(255, 255, 255)
-    except: print("LCD Init Failed")
+    except: print("LCD Init Failed (Check I2C)")
 
     button = Button(BUTTON_PIN, pull_up=False)
     button.when_pressed = toggle_system
@@ -221,15 +280,13 @@ def main():
     kit = None
     try:
         kit = ServoKit(channels=16)
-    except: print("ServoKit Init Failed")
+    except: print("ServoKit Init Failed (Check I2C)")
 
     # Controllers
     led_ctrl = LEDController()
     servo_ctrl = ServoController(kit) if kit else None
 
-    # 2. Start Cameras & Flask (Available always, but maybe we only want to show them when running?)
-    # User said "cameras should be all streaming". Usually this implies always available or available when running.
-    # To avoid complexity of start/stop latency for cameras, we'll keep them running in background.
+    # 2. Start Cameras & Flask (Available always)
     
     # CSI
     for i in range(2):
@@ -238,14 +295,19 @@ def main():
             if cam.start(): active_cameras[f"CSI Camera {i}"] = cam
         except: pass
     
-    # USB
-    for i in range(5):
+    # START USB CAMERAS
+    print("Attempting to start USB Cameras (scanning 0-9)...")
+    for i in range(10): 
         try:
             cam = USBCameraStream(i)
-            if cam.start(): 
+            # Custom 'start' now includes a robust frame check
+            if cam.start():
+                print(f"  -> USB Camera {i} is VALID.")
                 active_cameras[f"USB Camera {i}"] = cam
-                time.sleep(0.5)
-        except: pass
+            else:
+                pass 
+        except Exception as e:
+            pass
 
     flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False), daemon=True)
     flask_thread.start()
@@ -257,8 +319,16 @@ def main():
         images = [os.path.join(IMAGE_FOLDER, f) for f in os.listdir(IMAGE_FOLDER) if f.lower().endswith(exts)]
         images.sort()
     
+    # Check Display Environment for Sudos
+    if "DISPLAY" not in os.environ:
+        print("Warning: DISPLAY environment variable not set. Slideshow/GUI might fail.")
+        print("Try: export DISPLAY=:0 && sudo -E python3 main_controller.py")
+        # Attempt to auto-fix
+        os.environ["DISPLAY"] = ":0"
+    
     window_name = "Slideshow"
     current_img_idx = 0
+    slideshow_enabled = True # Fallback if GUI fails
     
     print(f"\nReady. IP: {get_ip_address()}")
     print("Press Button to Start/Stop. Ctrl+C to Exit.\n")
@@ -270,8 +340,7 @@ def main():
         lcd.setCursor(0,1); lcd.print("press ---->")
         lcd.setRGB(255, 255, 255)
 
-    last_state = False # To detect edges in main loop if needed, but event handles it.
-
+    last_state = False 
     last_slide_time = 0
     SLIDE_DURATION = 3.0
 
@@ -279,10 +348,7 @@ def main():
         while True:
             if system_running.is_set():
                 # --- RUNNING STATE ---
-                
-                # Check if we just started
                 if not last_state:
-                    # Just transitioned to ON
                     if lcd:
                         lcd.clear()
                         lcd.setCursor(0,0); lcd.print("Running...")
@@ -291,34 +357,44 @@ def main():
                     led_ctrl.start()
                     if servo_ctrl: servo_ctrl.start()
                     
-                    # Open Window
-                    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-                    cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+                    # Try Open Window
+                    try:
+                        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+                        cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+                        slideshow_enabled = True
+                    except Exception as e:
+                        print(f"GUI Error: {e}. Slideshow disabled.")
+                        slideshow_enabled = False
+                        
                     last_state = True
 
                 # Slideshow Logic
-                if images:
+                if images and slideshow_enabled:
                     now = time.time()
                     if now - last_slide_time > SLIDE_DURATION:
                          # Load next image
                         img = cv2.imread(images[current_img_idx])
                         if img is not None:
-                            cv2.imshow(window_name, img)
+                            try:
+                                cv2.imshow(window_name, img)
+                            except:
+                                # If display disconnects mid-stream
+                                slideshow_enabled = False
                         
                         current_img_idx = (current_img_idx + 1) % len(images)
                         last_slide_time = now
                 
                 # Critical: process GUI events
-                key = cv2.waitKey(100) # 100ms wait
-                if key == ord('q'):
-                    system_running.clear() # Allow 'q' to stop too
+                if slideshow_enabled:
+                    key = cv2.waitKey(100) 
+                    if key == ord('q'):
+                        system_running.clear() 
+                else:
+                    time.sleep(0.1)
 
             else:
                 # --- IDLE STATE ---
-                
-                # Check if we just stopped
                 if last_state:
-                    # Just transitioned to OFF
                     if lcd:
                         lcd.clear()
                         lcd.setCursor(0,0); lcd.print("Hello! To start")
@@ -328,9 +404,11 @@ def main():
                     led_ctrl.stop()
                     if servo_ctrl: servo_ctrl.stop()
                     
-                    cv2.destroyAllWindows()
-                    # Also need cv2.waitKey(1) to process the destroy event on some systems
-                    cv2.waitKey(1)
+                    if slideshow_enabled:
+                         try:
+                             cv2.destroyAllWindows()
+                             cv2.waitKey(1)
+                         except: pass
                     
                     last_state = False
 
@@ -346,7 +424,9 @@ def main():
         if lcd:
             try: lcd.clear(); lcd.setRGB(0,0,0)
             except: pass
-        cv2.destroyAllWindows()
+        try:
+             cv2.destroyAllWindows()
+        except: pass
 
 if __name__ == "__main__":
     main()
