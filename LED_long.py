@@ -3,7 +3,7 @@ import neopixel
 import time
 
 pixel_pin = board.D12      # GPIO12 (pin physique 32)
-num_pixels = 10            # peu importe, 10 suffit pour tester
+num_pixels = 30            # peu importe, 10 suffit pour tester
 
 pixels = neopixel.NeoPixel(
     pixel_pin,
