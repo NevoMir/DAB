@@ -180,7 +180,10 @@ class LEDController:
                 self.pixels_2.fill(c2)
                 self.pixels_1.show()
                 self.pixels_2.show()
-                time.sleep(1)
+                # Sleep in small chunks to be responsive to stop
+                for _ in range(10): 
+                    if not self.running: break
+                    time.sleep(0.1)
 
     def stop(self):
         self.running = False
