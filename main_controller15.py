@@ -1,0 +1,503 @@
+import time
+import threading
+import cv2
+import socket
+import board
+import neopixel
+import os
+import sys
+import random
+import datetime
+# import subprocess  <-- REMOVED GIT IMPORT
+from flask import Flask, Response, render_template_string
+from gpiozero import Button
+from adafruit_servokit import ServoKit
+from rgb1602 import RGB1602
+
+# Import CSI Camera Class
+try:
+    from CSI_camera import CameraStream as CSICameraStream
+except ImportError:
+    print("Error: Could not import CameraStream (CSI)")
+
+# GIT INTEGRATION REMOVED IN THIS VERSION (main_controller15.py)
+
+# REDEFINE USB CAMERA CLASS LOCALLY (Robust Version)
+class USBCameraStream:
+    def __init__(self, camera_index):
+        self.camera_index = camera_index
+        self.cap = None
+        self.running = False
+        self.thread = None
+        self.frame = None
+        self.lock = threading.Lock()
+        self.error_count = 0 
+
+    def start(self):
+        try:
+            self.cap = cv2.VideoCapture(self.camera_index)
+            if not self.cap.isOpened():
+                return False
+            ret, _ = self.cap.read()
+            if not ret:
+                return False
+                
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            self.running = True
+            self.thread = threading.Thread(target=self._update, daemon=True)
+            self.thread.start()
+            return True
+        except Exception as e:
+            return False
+
+    def _update(self):
+        while self.running and self.cap.isOpened():
+            try:
+                ret, frame = self.cap.read()
+                if ret:
+                    with self.lock:
+                        self.frame = frame
+                    self.error_count = 0
+                else:
+                    self.error_count += 1
+                    if self.error_count % 100 == 1:
+                         # Suppress spam
+                         pass
+                    time.sleep(0.1)
+            except Exception:
+                time.sleep(0.1)
+
+    def get_frame(self):
+        with self.lock:
+            return self.frame
+
+    def stop(self):
+        self.running = False
+        if self.thread:
+            self.thread.join()
+        if self.cap:
+            self.cap.release()
+
+# ==============================================================================
+# GLOBAL CONFIGURATION
+# ==============================================================================
+LED_PIN_1 = board.D12
+LED_COUNT_1 = 120
+LED_PIN_2 = board.D18
+LED_COUNT_2 = 32
+
+BUTTON_PIN = 4
+IMAGE_FOLDER = 'images'
+
+# Global State
+system_running = threading.Event()
+app = Flask(__name__)
+active_cameras = {}
+led_update_event = threading.Event() # Signal to change LEDs
+
+# ==============================================================================
+# FLASK APP
+# ==============================================================================
+def generate_frames(cam_key):
+    cam = active_cameras.get(cam_key)
+    if not cam: return
+    while True:
+        frame = cam.get_frame()
+        if frame is None:
+            time.sleep(0.1)
+            continue
+        ret, buffer = cv2.imencode('.jpg', frame)
+        if not ret: continue
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+        time.sleep(0.04) 
+
+@app.route('/')
+def index():
+    active_keys = sorted(list(active_cameras.keys()))
+    html = """
+    <html>
+        <head><title>DAB Stream</title></head>
+        <body style="background:#222;color:#fff;text-align:center;">
+            <h1>Live Feeds</h1>
+            <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:20px;">
+                {% for key in active_keys %}
+                <div style="background:#333;padding:10px;">
+                    <h3>{{ key }}</h3>
+                    <img src="{{ url_for('video_feed', cam_key=key) }}" style="max-width:400px;">
+                </div>
+                {% endfor %}
+            </div>
+        </body>
+    </html>
+    """
+    return render_template_string(html, active_keys=active_keys)
+
+@app.route('/video_feed/<cam_key>')
+def video_feed(cam_key):
+    return Response(generate_frames(cam_key),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
+
+# ==============================================================================
+# LED CONTROLLER (Random Natural)
+# ==============================================================================
+class LEDController:
+    def __init__(self):
+        self.running = False
+        self.thread = None
+        self.pixels_1 = neopixel.NeoPixel(LED_PIN_1, LED_COUNT_1, brightness=0.4, auto_write=False)
+        self.pixels_2 = neopixel.NeoPixel(LED_PIN_2, LED_COUNT_2, brightness=1.0, auto_write=False)
+
+    def start(self):
+        if self.running: return
+        self.running = True
+        self.thread = threading.Thread(target=self._animate, daemon=True)
+        self.thread.start()
+
+    def _animate(self):
+        # Initial State
+        self._set_random_natural()
+        
+        while self.running:
+            # Wait for signal to change
+            if led_update_event.wait(timeout=0.1):
+                self._set_random_natural()
+                led_update_event.clear()
+            
+            # Keep responsive check
+            if not self.running: break
+
+    def _set_random_natural(self):
+        # Brightness
+        b1 = random.uniform(0, 0.4)
+        b2 = random.uniform(0, 1.0)
+        # Ensure at least one is ON
+        if b1 < 0.05 and b2 < 0.05:
+            if random.choice([True, False]): b1 = 0.2
+            else: b2 = 0.5
+            
+        self.pixels_1.brightness = b1
+        self.pixels_2.brightness = b2
+        
+        # Color: Yellow (255,255,0) to White (255,255,255)
+        # R=255, G=255, B varies
+        blue_comp = random.randint(0, 255)
+        color = (255, 255, blue_comp)
+        
+        self.pixels_1.fill(color)
+        self.pixels_2.fill(color)
+        self.pixels_1.show()
+        self.pixels_2.show()
+
+    def stop(self):
+        self.running = False
+        led_update_event.set() # Wake up thread
+        if self.thread: 
+            self.thread.join()
+            self.thread = None
+        try:
+            self.pixels_1.fill((0,0,0)); self.pixels_1.show()
+            self.pixels_2.fill((0,0,0)); self.pixels_2.show()
+        except: pass
+
+# ==============================================================================
+# SNAPSHOT LOGIC
+# ==============================================================================
+def save_snapshots(counter):
+    now = datetime.datetime.now()
+    hour_folder = now.strftime("%H")
+    base_path = os.path.join(IMAGE_FOLDER, hour_folder)
+    
+    if not os.path.exists(base_path):
+        try: os.makedirs(base_path)
+        except: pass
+        
+    print(f"  [Snap] Saving images to {base_path}...")
+    
+    for name, cam in active_cameras.items():
+        frame = cam.get_frame()
+        if frame is not None:
+            # Map names
+            # USB Camera X -> USBX
+            # CSI Camera 0 -> CSI90 (Cam 0 as per user mapping preference assumption)
+            # CSI Camera 1 -> CSI45 (Cam 1)
+            
+            filename = ""
+            if "USB" in name:
+                idx = name.split()[-1]
+                filename = f"USB{idx}_{counter}.jpg"
+            elif "CSI" in name:
+                idx = name.split()[-1]
+                if idx == "0": filename = f"CSI90_{counter}.jpg"
+                elif idx == "1": filename = f"CSI45_{counter}.jpg"
+                else: filename = f"CSI_Unknown_{counter}.jpg"
+            
+            full_path = os.path.join(base_path, filename)
+            try:
+                cv2.imwrite(full_path, frame)
+            except Exception as e:
+                print(f"    Failed to save {filename}: {e}")
+
+# ==============================================================================
+# SERVO CONTROLLER (10-Step Random)
+# ==============================================================================
+class ServoController:
+    def __init__(self, kit):
+        self.kit = kit
+        self.running = False
+        self.thread = None
+        
+    def start(self):
+        if self.running: return
+        self.running = True
+        self.thread = threading.Thread(target=self._run_sequence, daemon=True)
+        self.thread.start()
+
+    def _run_sequence(self):
+        servo = self.kit.servo[0]
+        SPEED = 180.0 / 5.0 # deg/sec
+        
+        # Init: Go to 0 slowly
+        self._move_to(servo, 0, SPEED)
+        
+        current_angle = 0.0
+        direction = 1 # 1=Up, -1=Down
+        
+        # 10 Steps
+        for i in range(1, 11):
+            if not self.running: break
+            
+            # TRIGGER LED CHANGE START OF MOVE
+            led_update_event.set()
+            
+            # Calculate next step
+            step = random.randint(3, 30)
+            
+            # Bounce Logic
+            next_angle = current_angle + (step * direction)
+            
+            if next_angle > 180:
+                # Bounce back
+                diff = next_angle - 180
+                next_angle = 180 - diff # Simple reflection? 
+                # User said: "take 180 and subtract 3-30". 
+                # Let's simple switch direction and apply the step
+                direction = -1
+                next_angle = current_angle - step
+                
+            elif next_angle < 0:
+                direction = 1
+                next_angle = current_angle + step
+                
+            # Clamp just in case
+            if next_angle > 180: next_angle = 180
+            if next_angle < 0: next_angle = 0
+            
+            print(f"  [Servo] Step {i}/10: Moving {current_angle:.1f} -> {next_angle:.1f}")
+            self._move_to(servo, next_angle, SPEED)
+            current_angle = next_angle
+            
+            # STOPPED
+            # Total wait 2s. 
+            # 1.5s -> Picture -> 0.5s -> Next
+            
+            if not self.running: break
+            time.sleep(1.5)
+            
+            if not self.running: break
+            save_snapshots(i)
+            
+            if not self.running: break
+            time.sleep(0.5)
+        
+        # End of sequence: Return to 0
+        if self.running:
+            print("  [Servo] Sequence Done. Returning to 0.")
+            self._move_to(servo, 0, SPEED)
+            
+            # NO GIT PUSH IN THIS VERSION
+        
+    def _move_to(self, servo, target, speed):
+        start = servo.angle
+        if start is None: start = 0
+        dist = abs(target - start)
+        duration = dist / speed
+        steps = int(duration * 50) # 50Hz
+        if steps < 1: steps = 1
+        
+        delta = (target - start) / steps
+        curr = start
+        
+        for _ in range(steps):
+            if not self.running: return
+            curr += delta
+            # Safety clamp
+            if curr < 0: curr = 0
+            if curr > 180: curr = 180
+            servo.angle = curr
+            time.sleep(0.02)
+        servo.angle = target
+
+    def stop(self):
+        self.running = False
+        if self.thread:
+            self.thread.join()
+            self.thread = None
+
+# ==============================================================================
+# MAIN LOGIC
+# ==============================================================================
+def get_ip_address():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except:
+        return "127.0.0.1"
+
+def toggle_system():
+    if system_running.is_set():
+        print("Stopping System...")
+        system_running.clear()
+    else:
+        print("Starting System...")
+        system_running.set()
+
+def main():
+    # 1. Hardware Init
+    lcd = None
+    try:
+        lcd = RGB1602(16, 2)
+        lcd.setRGB(255, 255, 255)
+    except: print("LCD Init Failed")
+
+    button = Button(BUTTON_PIN, pull_up=False)
+    button.when_pressed = toggle_system
+
+    kit = None
+    try:
+        kit = ServoKit(channels=16)
+    except: print("ServoKit Init Failed")
+
+    led_ctrl = LEDController()
+    servo_ctrl = ServoController(kit) if kit else None
+
+    # 2. Start Cameras
+    # CSI
+    for i in range(2):
+        try:
+            cam = CSICameraStream(i)
+            if cam.start(): active_cameras[f"CSI Camera {i}"] = cam
+        except: pass
+    
+    # USB
+    for i in range(10): 
+        try:
+            cam = USBCameraStream(i)
+            if cam.start():
+                print(f"  -> USB Camera {i} is VALID.")
+                active_cameras[f"USB Camera {i}"] = cam
+        except: pass
+
+    flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False), daemon=True)
+    flask_thread.start()
+
+    # 3. Slideshow Setup
+    # Random shuffle, no repeat
+    images = []
+    if os.path.exists(IMAGE_FOLDER):
+        exts = ('.jpg', '.jpeg', '.png', '.bmp')
+        images = [os.path.join(IMAGE_FOLDER, f) for f in os.listdir(IMAGE_FOLDER) if f.lower().endswith(exts)]
+        random.shuffle(images) # Shuffle once at start
+    
+    # Check Display
+    if "DISPLAY" not in os.environ:
+        os.environ["DISPLAY"] = ":0"
+    
+    window_name = "Slideshow"
+    current_img_idx = 0
+    slideshow_enabled = True
+    
+    # Create Hourly Folder if not exists (checked in loop anyway)
+    
+    print(f"\nReady. IP: {get_ip_address()}")
+    print("Press Button to Start 10-Step Sequence.\n")
+
+    if lcd:
+        lcd.clear(); lcd.setCursor(0,0); lcd.print("Hello!")
+        lcd.setRGB(255, 255, 255)
+
+    last_state = False 
+    last_slide_time = 0
+    SLIDE_DURATION = 3.0
+
+    try:
+        while True:
+            if system_running.is_set():
+                # --- RUNNING ---
+                if not last_state:
+                    if lcd:
+                        lcd.clear(); lcd.setCursor(0,0); lcd.print("Running...")
+                        lcd.setCursor(0,1); lcd.print("10-Step Seq")
+                        lcd.setRGB(0, 255, 0)
+                    
+                    random.shuffle(images) # Reshuffle on every new start
+                    led_ctrl.start() # Starts natural light
+                    if servo_ctrl: servo_ctrl.start() # Starts 10-step sequence
+                    
+                    try:
+                        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+                        cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+                        slideshow_enabled = True
+                    except: slideshow_enabled = False
+                    
+                    last_state = True
+
+                # Slideshow Loop
+                if images and slideshow_enabled and slideshow_enabled:
+                    now = time.time()
+                    if now - last_slide_time > SLIDE_DURATION:
+                        img = cv2.imread(images[current_img_idx])
+                        if img is not None:
+                            try: cv2.imshow(window_name, img)
+                            except: slideshow_enabled = False
+                        
+                        current_img_idx = (current_img_idx + 1) % len(images)
+                        last_slide_time = now
+                
+                # GUI Events
+                if slideshow_enabled:
+                    if cv2.waitKey(50) == ord('q'): system_running.clear()
+                else:
+                    time.sleep(0.1)
+
+            else:
+                # --- IDLE ---
+                if last_state:
+                    if lcd:
+                        lcd.clear(); lcd.setCursor(0,0); lcd.print("Hello!")
+                        lcd.setRGB(255, 255, 255)
+                    led_ctrl.stop()
+                    if servo_ctrl: servo_ctrl.stop()
+                    try: cv2.destroyAllWindows(); cv2.waitKey(1)
+                    except: pass
+                    last_state = False
+                time.sleep(0.1)
+
+    except KeyboardInterrupt:
+        print("\nExiting...")
+    finally:
+        led_ctrl.stop()
+        if servo_ctrl: servo_ctrl.stop()
+        for cam in active_cameras.values(): cam.stop()
+        if lcd: 
+            try: lcd.clear(); lcd.setRGB(0,0,0)
+            except: pass
+        try: cv2.destroyAllWindows()
+        except: pass
+
+if __name__ == "__main__":
+    main()
