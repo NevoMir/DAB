@@ -369,15 +369,21 @@ class ServoController:
 # ==============================================================================
 # MAIN LOGIC
 # ==============================================================================
-def get_ip_address():
+# ==============================================================================
+# MAIN LOGIC
+# ==============================================================================
+def get_all_ips():
+    """
+    Returns a list of all IP addresses associated with the host.
+    Uses 'hostname -I' which works well on Raspberry Pi OS.
+    """
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
-    except:
-        return "127.0.0.1"
+        result = subprocess.run(['hostname', '-I'], capture_output=True, text=True)
+        ips = result.stdout.strip().split()
+        return [ip for ip in ips if ip] # Filter empty strings
+    except Exception as e:
+        print(f"Error getting IPs: {e}")
+        return []
 
 def toggle_system():
     if system_running.is_set():
@@ -423,6 +429,8 @@ def main():
                 active_cameras[f"USB Camera {i}"] = cam
         except: pass
 
+    # Start Flask
+    print("\n[Network Debug] Starting Web Server on 0.0.0.0 (All Interfaces)...")
     flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False), daemon=True)
     flask_thread.start()
 
@@ -442,13 +450,29 @@ def main():
     current_img_idx = 0
     slideshow_enabled = True
     
-    # Create Hourly Folder if not exists (checked in loop anyway)
+    # NETWORK DEBUGGING OUTPUT
+    ips = get_all_ips()
+    print("\n" + "="*40)
+    print("       NETWORK DIAGNOSTICS")
+    print("="*40)
+    if not ips:
+        print("CRITICAL: No IP addresses found!")
+        print(" - Check Ethernet/WiFi connection.")
+        display_ip = "No Net!"
+    else:
+        print("Detected IP Addresses:")
+        for i, ip in enumerate(ips):
+            print(f"  {i+1}. http://{ip}:5000")
+        print("\nTry connecting to ANY of the above URLs.")
+        print("Note: If Ethernet is connected strictly to a laptop, use the Ethernet IP.")
+        display_ip = ips[0] # Show the first one on LCD
+    print("="*40 + "\n")
     
-    print(f"\nReady. IP: {get_ip_address()}")
     print("Press Button to Start 10-Step Sequence.\n")
 
     if lcd:
-        lcd.clear(); lcd.setCursor(0,0); lcd.print("Hello!")
+        lcd.clear(); lcd.setCursor(0,0); lcd.print("Ready! IP:")
+        lcd.setCursor(0,1); lcd.print(display_ip) # Show IP immediately
         lcd.setRGB(255, 255, 255)
 
     last_state = False 
