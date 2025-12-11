@@ -1,7 +1,7 @@
 import time
 import threading
-import cv2
 import socket
+import cv2
 import board
 import neopixel
 import os
