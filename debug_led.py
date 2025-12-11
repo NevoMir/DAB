@@ -4,7 +4,7 @@ import time
 
 # Configuration
 # user used D12 in LED_long.py
-PIN = board.D12
+PIN = board.D18
 NUM_PIXELS = 30 # Start with 30, can increase if strip is longer
 ORDER = neopixel.GRB # Try GRBW if GRB produces wrong colors
 
