@@ -224,9 +224,8 @@ class LEDController:
 # SNAPSHOT LOGIC
 # ==============================================================================
 def save_snapshots(counter):
-    now = datetime.datetime.now()
-    hour_folder = now.strftime("%H")
-    base_path = os.path.join(IMAGE_FOLDER, hour_folder)
+    # Save to 'Color' folder inside images
+    base_path = os.path.join(IMAGE_FOLDER, 'Color')
     
     if not os.path.exists(base_path):
         try: os.makedirs(base_path)
