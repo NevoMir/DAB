@@ -511,26 +511,33 @@ def main():
         # ==========================================
         print("Sequence Finished. Shutting down...")
         
-        # Turn off lights
-        led_ctrl.stop()
-        if servo_ctrl: servo_ctrl.stop()
-        
-        # LCD: Green (0, 255, 0) "Thank you and // good bye"
+        # 1. IMMEDIATE UI UPDATE (Prioritize this before any crash risk)
         if lcd:
-            lcd.setRGB(0, 255, 0)
-            lcd.clear()
-            lcd.setCursor(0,0); lcd.print("Thank you and")
-            lcd.setCursor(0,1); lcd.print("good bye")
-            
-        # Show Finished.jpeg
+            try:
+                lcd.setRGB(0, 255, 0) # Green
+                lcd.clear()
+                lcd.setCursor(0,0); lcd.print("Thank you and")
+                lcd.setCursor(0,1); lcd.print("good bye")
+            except: pass
+
+        # 2. Turn off lights (Gentle stop)
+        try:
+            led_ctrl.stop()
+        except: pass
+
+        # 3. Show Finished.jpeg
         fin_img_path = os.path.join(IMAGE_FOLDER, "Finished.jpeg")
         if os.path.exists(fin_img_path):
-            img = cv2.imread(fin_img_path)
-            if img is not None:
-                cv2.imshow(window_name, img)
-                cv2.waitKey(10)
+            try:
+                img = cv2.imread(fin_img_path)
+                if img is not None:
+                    try:
+                        cv2.imshow(window_name, img)
+                        cv2.waitKey(10)
+                    except: pass
+            except: pass
         
-        # Wait 5 seconds before full exit to allow user to see screen
+        # Wait 5 seconds to let user see "Finished" and Git to complete if lagging
         time.sleep(5)
 
     except Exception as e:
@@ -546,13 +553,19 @@ def main():
         time.sleep(10)
 
     finally:
-        # CLEANUP
-        print("Cleaning up...")
-        led_ctrl.stop()
-        if servo_ctrl: servo_ctrl.stop()
+        # CLEANUP (Legacy cleanup if not done above)
+        print("Final Cleanup...")
+        try: led_ctrl.stop()
+        except: pass
         
-        # Stop Cameras FIRST to release resources
-        for cam in active_cameras.values(): cam.stop()
+        if servo_ctrl: 
+            try: servo_ctrl.stop()
+            except: pass
+        
+        # Stop Cameras
+        for cam in active_cameras.values(): 
+            try: cam.stop()
+            except: pass
         
         # Close Window
         try:
@@ -560,14 +573,14 @@ def main():
             for _ in range(5): cv2.waitKey(1)
         except: pass
         
-        # Finally Clear LCD
-        if lcd: 
-            try: lcd.clear(); lcd.setRGB(0,0,0)
-            except: pass
-            
+        # LCD Off (Optional, user might want "Good bye" to stay? 
+        # User said "Show... good bye", usually implies persistent until power off or restart.
+        # But script exits. If script exits, LCD state might persist or clear. 
+        # Let's LEAVE it asking "Thank you" (Green) and not clear it to black.
+        # Only clear if error? No, let's leave it Green.
+        
         print("Exited.")
-        # Force Exit to prevent hanging threads causing segfaults
-        os._exit(0)
+        sys.exit(0)
 
 if __name__ == "__main__":
     main()
