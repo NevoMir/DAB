@@ -159,7 +159,7 @@ def video_feed(cam_key):
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
 # ==============================================================================
-# LED CONTROLLER (Random Natural)
+# LED CONTROLLER (Seed Logic)
 # ==============================================================================
 class LEDController:
     def __init__(self):
@@ -175,43 +175,70 @@ class LEDController:
         self.thread.start()
 
     def _animate(self):
-        # Initial State
-        self._set_random_natural()
+        # Initial Light Up
+        self._set_seeds()
         
         while self.running:
-            # Wait for signal to change
+            # Wait for signal OR just update
             if led_update_event.wait(timeout=0.1):
-                self._set_random_natural()
+                self._set_seeds()
                 led_update_event.clear()
             
-            # Keep responsive check
             if not self.running: break
 
-    def _set_random_natural(self):
-        # Brightness
-        b1 = random.uniform(0, 0.4)
-        b2 = random.uniform(0, 1.0)
-        # Ensure at least one is ON
-        if b1 < 0.05 and b2 < 0.05:
-            if random.choice([True, False]): b1 = 0.2
-            else: b2 = 0.5
+    def _set_seeds(self):
+        # STRIP: 1 to 3 seeds
+        self._apply_seed_logic(self.pixels_1, LED_COUNT_1, random.randint(1, 3))
+        # RING: 2 seeds
+        self._apply_seed_logic(self.pixels_2, LED_COUNT_2, 2)
+
+    def _apply_seed_logic(self, pixels, num_leds, num_seeds):
+        pixels.fill((0, 0, 0)) # Clear
+        
+        # Avoid division by zero
+        if num_seeds < 1: num_seeds = 1
+        max_lit = num_leds // num_seeds 
+        if max_lit < 1: max_lit = 1
+
+        for _ in range(num_seeds):
+            # 1. Random Seed Position
+            pos = random.randint(0, num_leds - 1)
             
-        self.pixels_1.brightness = b1
-        self.pixels_2.brightness = b2
+            # 2. Random number of LEDs to light up (1 to max_lit)
+            lit_count = random.randint(1, max_lit)
+            
+            # 3. Random Color (Yellow to White) & Brightness
+            b = random.uniform(0.1, 1.0)
+            pixels.brightness = b # Note: NeoPixel lib sets GLOBAL brightness, not per LED easily. 
+            # We will simulate per-seed brightness by scaling color values instead, 
+            # OR just accept global brightness changes (library limitation).
+            # The library property .brightness is global. 
+            # We will use COLOR scaling for per-seed variation.
+            
+            # Colors: Yellow(255,255,0) -> White(255,255,255)
+            # R=255, G=255, B=0-255
+            blue_val = random.randint(0, 255)
+            # Apply brightness factor to RGB
+            # Note: "random brightness" requested per seed. 
+            seed_brightness = random.uniform(0.1, 1.0)
+            
+            r = int(255 * seed_brightness)
+            g = int(255 * seed_brightness)
+            b = int(blue_val * seed_brightness)
+            
+            color = (r, g, b)
+
+            # 4. Light up neighbors to the right
+            for i in range(lit_count):
+                idx = pos + i
+                if idx < num_leds:
+                    pixels[idx] = color
         
-        # Color: Yellow (255,255,0) to White (255,255,255)
-        # R=255, G=255, B varies
-        blue_comp = random.randint(0, 255)
-        color = (255, 255, blue_comp)
-        
-        self.pixels_1.fill(color)
-        self.pixels_2.fill(color)
-        self.pixels_1.show()
-        self.pixels_2.show()
+        pixels.show()
 
     def stop(self):
         self.running = False
-        led_update_event.set() # Wake up thread
+        led_update_event.set() 
         if self.thread: 
             self.thread.join()
             self.thread = None
@@ -236,11 +263,6 @@ def save_snapshots(counter):
     for name, cam in active_cameras.items():
         frame = cam.get_frame()
         if frame is not None:
-            # Map names
-            # USB Camera X -> USBX
-            # CSI Camera 0 -> CSI90 (Cam 0 as per user mapping preference assumption)
-            # CSI Camera 1 -> CSI45 (Cam 1)
-            
             filename = ""
             if "USB" in name:
                 idx = name.split()[-1]
@@ -294,15 +316,13 @@ class ServoController:
             
             # Bounce Logic
             next_angle = current_angle + (step * direction)
-            
             if next_angle > 180:
-                # Bounce back
                 diff = next_angle - 180
                 next_angle = 180 - diff # Simple reflection? 
-                # User said: "take 180 and subtract 3-30". 
-                # Let's simple switch direction and apply the step
                 direction = -1
-                next_angle = current_angle - step
+                # Or user simple logic: Re-calc
+                if current_angle > 150: direction = -1
+                next_angle = current_angle - step if direction == -1 else current_angle + step
                 
             elif next_angle < 0:
                 direction = 1
@@ -317,9 +337,6 @@ class ServoController:
             current_angle = next_angle
             
             # STOPPED
-            # Total wait 2s. 
-            # 1.5s -> Picture -> 0.5s -> Next
-            
             if not self.running: break
             time.sleep(1.5)
             
@@ -329,21 +346,26 @@ class ServoController:
             if not self.running: break
             time.sleep(0.5)
         
-        # End of sequence: Return to 0
+        # End of sequence
         if self.running:
             print("  [Servo] Sequence Done. Returning to 0.")
             self._move_to(servo, 0, SPEED)
             
-            # TRIGGER GIT PUSH
+            # Git Push happens in Main loop after thread join, 
+            # OR we can do it here. 
+            # To avoid threading conflicts, let's signal Main loop via a flag or just do it here.
+            # Doing it here blocks the thread, which is fine.
             if self.running:
                 git_push_changes()
         
+        self.running = False # Mark as done
+
     def _move_to(self, servo, target, speed):
         start = servo.angle
         if start is None: start = 0
         dist = abs(target - start)
         duration = dist / speed
-        steps = int(duration * 50) # 50Hz
+        steps = int(duration * 50) 
         if steps < 1: steps = 1
         
         delta = (target - start) / steps
@@ -352,7 +374,6 @@ class ServoController:
         for _ in range(steps):
             if not self.running: return
             curr += delta
-            # Safety clamp
             if curr < 0: curr = 0
             if curr > 180: curr = 180
             servo.angle = curr
@@ -364,62 +385,41 @@ class ServoController:
         if self.thread:
             self.thread.join()
             self.thread = None
+    
+    def is_alive(self):
+        return self.thread and self.thread.is_alive()
 
-# ==============================================================================
-# MAIN LOGIC
-# ==============================================================================
 # ==============================================================================
 # MAIN LOGIC
 # ==============================================================================
 def get_all_ips():
-    """
-    Returns a list of all IP addresses associated with the host.
-    Uses 'hostname -I' which works well on Raspberry Pi OS.
-    """
     try:
         result = subprocess.run(['hostname', '-I'], capture_output=True, text=True)
         ips = result.stdout.strip().split()
-        return [ip for ip in ips if ip] # Filter empty strings
-    except Exception as e:
-        print(f"Error getting IPs: {e}")
-        return []
-
-def toggle_system():
-    if system_running.is_set():
-        print("Stopping System...")
-        system_running.clear()
-    else:
-        print("Starting System...")
-        system_running.set()
+        return [ip for ip in ips if ip]
+    except: return []
 
 def main():
-    # 1. Hardware Init
     lcd = None
     try:
         lcd = RGB1602(16, 2)
-        lcd.setRGB(255, 255, 255)
     except: print("LCD Init Failed")
 
     button = Button(BUTTON_PIN, pull_up=False)
-    button.when_pressed = toggle_system
 
     kit = None
-    try:
-        kit = ServoKit(channels=16)
+    try: kit = ServoKit(channels=16)
     except: print("ServoKit Init Failed")
 
     led_ctrl = LEDController()
     servo_ctrl = ServoController(kit) if kit else None
 
-    # 2. Start Cameras
-    # CSI
+    # Start Cameras
     for i in range(2):
         try:
             cam = CSICameraStream(i)
             if cam.start(): active_cameras[f"CSI Camera {i}"] = cam
         except: pass
-    
-    # USB
     for i in range(10): 
         try:
             cam = USBCameraStream(i)
@@ -428,112 +428,131 @@ def main():
                 active_cameras[f"USB Camera {i}"] = cam
         except: pass
 
-    # Start Flask
-    print("\n[Network Debug] Starting Web Server on 0.0.0.0 (All Interfaces)...")
+    # Flask
     flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False), daemon=True)
     flask_thread.start()
 
-    # 3. Slideshow Setup
-    # Random shuffle, no repeat
+    # Images
     images = []
     if os.path.exists(IMAGE_FOLDER):
         exts = ('.jpg', '.jpeg', '.png', '.bmp')
         images = [os.path.join(IMAGE_FOLDER, f) for f in os.listdir(IMAGE_FOLDER) if f.lower().endswith(exts)]
-        random.shuffle(images) # Shuffle once at start
-    
-    # Check Display
-    if "DISPLAY" not in os.environ:
-        os.environ["DISPLAY"] = ":0"
-    
+        random.shuffle(images)
+
+    if "DISPLAY" not in os.environ: os.environ["DISPLAY"] = ":0"
     window_name = "Slideshow"
-    current_img_idx = 0
-    slideshow_enabled = True
-    
-    # NETWORK DEBUGGING OUTPUT
+
+    # Network Debug
     ips = get_all_ips()
-    print("\n" + "="*40)
-    print("       NETWORK DIAGNOSTICS")
-    print("="*40)
-    if not ips:
-        print("CRITICAL: No IP addresses found!")
-        print(" - Check Ethernet/WiFi connection.")
-        display_ip = "No Net!"
-    else:
-        print("Detected IP Addresses:")
-        for i, ip in enumerate(ips):
-            print(f"  {i+1}. http://{ip}:5000")
-        print("\nTry connecting to ANY of the above URLs.")
-        print("Note: If Ethernet is connected strictly to a laptop, use the Ethernet IP.")
-        display_ip = ips[0] # Show the first one on LCD
+    print("\n" + "="*40); print("       NETWORK DIAGNOSTICS"); print("="*40)
+    for i, ip in enumerate(ips): print(f"  {i+1}. http://{ip}:5000")
     print("="*40 + "\n")
-    
-    print("Press Button to Start 10-Step Sequence.\n")
-
-    if lcd:
-        lcd.clear(); lcd.setCursor(0,0); lcd.print("Ready! IP:")
-        lcd.setCursor(0,1); lcd.print(display_ip) # Show IP immediately
-        lcd.setRGB(255, 255, 255)
-
-    last_state = False 
-    last_slide_time = 0
-    SLIDE_DURATION = 3.0
 
     try:
+        # ==========================================
+        # PHASE 1: START SCREEN
+        # ==========================================
+        print("PHASE 1: Waiting for Button...")
+        
+        # LCD: White (200, 200, 200)
+        # "Hello! Press to // start ----->"
+        if lcd:
+            lcd.setRGB(200, 200, 200)
+            lcd.clear()
+            lcd.setCursor(0,0); lcd.print("Hello! Press to")
+            lcd.setCursor(0,1); lcd.print("start ----->")
+        
+        # Show Start.jpeg
+        start_img_path = os.path.join(IMAGE_FOLDER, "Start.jpeg")
+        if os.path.exists(start_img_path):
+            img = cv2.imread(start_img_path)
+            if img is not None:
+                cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+                cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+                cv2.imshow(window_name, img)
+                cv2.waitKey(10)
+        
+        # Wait for button
+        button.wait_for_press()
+        print("Button Pressed! Starting...")
+
+        # ==========================================
+        # PHASE 2: RUNNING
+        # ==========================================
+        # LCD: Orange (255, 165, 0) "Running..."
+        if lcd:
+            lcd.setRGB(255, 165, 0)
+            lcd.clear()
+            lcd.setCursor(0,0); lcd.print("Running...")
+        
+        led_ctrl.start()
+        if servo_ctrl: servo_ctrl.start()
+        
+        # Slideshow Loop (Blocking Main Thread while Servo runs)
+        current_img_idx = 0
+        last_slide_time = 0
+        SLIDE_DURATION = 3.0
+        
         while True:
-            if system_running.is_set():
-                # --- RUNNING ---
-                if not last_state:
-                    if lcd:
-                        lcd.clear(); lcd.setCursor(0,0); lcd.print("Running...")
-                        lcd.setCursor(0,1); lcd.print("10-Step Seq")
-                        lcd.setRGB(0, 255, 0)
-                    
-                    random.shuffle(images) # Reshuffle on every new start
-                    led_ctrl.start() # Starts natural light
-                    if servo_ctrl: servo_ctrl.start() # Starts 10-step sequence
-                    
+            # Check if servo finished
+            if servo_ctrl and not servo_ctrl.running:
+                # Sequence done
+                break
+                
+            # Slideshow
+            now = time.time()
+            if images and (now - last_slide_time > SLIDE_DURATION):
+                img = cv2.imread(images[current_img_idx])
+                if img is not None:
                     try:
                         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
                         cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-                        slideshow_enabled = True
-                    except: slideshow_enabled = False
-                    
-                    last_state = True
-
-                # Slideshow Loop
-                if images and slideshow_enabled and slideshow_enabled:
-                    now = time.time()
-                    if now - last_slide_time > SLIDE_DURATION:
-                        img = cv2.imread(images[current_img_idx])
-                        if img is not None:
-                            try: cv2.imshow(window_name, img)
-                            except: slideshow_enabled = False
-                        
-                        current_img_idx = (current_img_idx + 1) % len(images)
-                        last_slide_time = now
-                
-                # GUI Events
-                if slideshow_enabled:
-                    if cv2.waitKey(50) == ord('q'): system_running.clear()
-                else:
-                    time.sleep(0.1)
-
-            else:
-                # --- IDLE ---
-                if last_state:
-                    if lcd:
-                        lcd.clear(); lcd.setCursor(0,0); lcd.print("Hello!")
-                        lcd.setRGB(255, 255, 255)
-                    led_ctrl.stop()
-                    if servo_ctrl: servo_ctrl.stop()
-                    try: cv2.destroyAllWindows(); cv2.waitKey(1)
+                        cv2.imshow(window_name, img)
                     except: pass
-                    last_state = False
-                time.sleep(0.1)
+                current_img_idx = (current_img_idx + 1) % len(images)
+                last_slide_time = now
+            
+            if cv2.waitKey(50) == ord('q'): break
 
-    except KeyboardInterrupt:
-        print("\nExiting...")
+        # ==========================================
+        # PHASE 3: FINISH & EXIT
+        # ==========================================
+        print("Sequence Finished. Shutting down...")
+        
+        # Turn off lights
+        led_ctrl.stop()
+        if servo_ctrl: servo_ctrl.stop()
+        
+        # LCD: Green (0, 255, 0) "Thank you and // good bye"
+        if lcd:
+            lcd.setRGB(0, 255, 0)
+            lcd.clear()
+            lcd.setCursor(0,0); lcd.print("Thank you and")
+            lcd.setCursor(0,1); lcd.print("good bye")
+            
+        # Show Finished.jpeg
+        fin_img_path = os.path.join(IMAGE_FOLDER, "Finished.jpeg")
+        if os.path.exists(fin_img_path):
+            img = cv2.imread(fin_img_path)
+            if img is not None:
+                cv2.imshow(window_name, img)
+                cv2.waitKey(10)
+        
+        # Wait 5 seconds before full exit to allow user to see screen
+        time.sleep(5)
+
+    except Exception as e:
+        print(f"ERROR: {e}")
+        # LCD: Red (255, 0, 0) "Something is // wrong"
+        if lcd:
+            lcd.setRGB(255, 0, 0)
+            lcd.clear()
+            lcd.setCursor(0,0); lcd.print("Something is")
+            lcd.setCursor(0,1); lcd.print("wrong")
+        time.sleep(10)
+
     finally:
+        # CLEANUP
         led_ctrl.stop()
         if servo_ctrl: servo_ctrl.stop()
         for cam in active_cameras.values(): cam.stop()
@@ -542,6 +561,7 @@ def main():
             except: pass
         try: cv2.destroyAllWindows()
         except: pass
+        print("Exited.")
 
 if __name__ == "__main__":
     main()
