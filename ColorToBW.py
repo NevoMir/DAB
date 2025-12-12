@@ -4,10 +4,10 @@ import shutil
 import time
 
 def convert_to_bw():
-    # Define paths
-    base_dir = "images"
-    input_dir = os.path.join(base_dir, "Color")
-    output_dir = os.path.join(base_dir, "BlackAndWhite")
+    # Define paths (Root of Repo)
+    # The script assumes it runs from the repo root or these folders are in the CWD.
+    input_dir = "Color"
+    output_dir = "BlackAndWhite"
 
     # 1. Verify Input
     if not os.path.exists(input_dir):

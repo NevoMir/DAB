@@ -25,15 +25,15 @@ except ImportError:
 # ==============================================================================
 def git_push_changes():
     """
-    Adds, commits, and pushes changes in the 'images' folder to the remote repository.
+    Adds, commits, and pushes changes in the 'Color' folder to the remote repository.
     """
     try:
         print("  [Git] Starting sync...")
-        # Add changes in images folder
-        subprocess.run(["git", "add", "images/"], check=True)
+        # Add changes in Color folder (Root of repo)
+        subprocess.run(["git", "add", "Color/"], check=True)
         
         # Commit (will fail if nothing to commit, so check=False is safer)
-        subprocess.run(["git", "commit", "-m", "Auto-save images from DAB"], check=False)
+        subprocess.run(["git", "commit", "-m", "Auto-save Color images"], check=False)
         
         # Push
         subprocess.run(["git", "push"], check=True)
@@ -188,11 +188,13 @@ class LEDController:
 
     def _set_seeds(self):
         # STRIP: 1 to 3 seeds
-        self._apply_seed_logic(self.pixels_1, LED_COUNT_1, random.randint(1, 3))
+        # Max Brightness 0.35 to keep current under limit (120*0.06*0.35 = 2.52A)
+        self._apply_seed_logic(self.pixels_1, LED_COUNT_1, random.randint(1, 3), max_brightness=0.35)
         # RING: 2 seeds
-        self._apply_seed_logic(self.pixels_2, LED_COUNT_2, 2)
+        # Max Brightness 0.8 (32*0.04*0.8 = 1.02A)
+        self._apply_seed_logic(self.pixels_2, LED_COUNT_2, 2, max_brightness=0.8)
 
-    def _apply_seed_logic(self, pixels, num_leds, num_seeds):
+    def _apply_seed_logic(self, pixels, num_leds, num_seeds, max_brightness=1.0):
         pixels.fill((0, 0, 0)) # Clear
         
         # Avoid division by zero
@@ -208,25 +210,15 @@ class LEDController:
             lit_count = random.randint(1, max_lit)
             
             # 3. Random Color (Yellow to White) & Brightness
-            b = random.uniform(0.1, 1.0)
-            pixels.brightness = b # Note: NeoPixel lib sets GLOBAL brightness, not per LED easily. 
-            # We will simulate per-seed brightness by scaling color values instead, 
-            # OR just accept global brightness changes (library limitation).
-            # The library property .brightness is global. 
-            # We will use COLOR scaling for per-seed variation.
+            # Scaled to safety limit
+            safe_b = random.uniform(0.1, max_brightness)
+            pixels.brightness = safe_b 
             
             # Colors: Yellow(255,255,0) -> White(255,255,255)
             # R=255, G=255, B=0-255
             blue_val = random.randint(0, 255)
-            # Apply brightness factor to RGB
-            # Note: "random brightness" requested per seed. 
-            seed_brightness = random.uniform(0.1, 1.0)
             
-            r = int(255 * seed_brightness)
-            g = int(255 * seed_brightness)
-            b = int(blue_val * seed_brightness)
-            
-            color = (r, g, b)
+            color = (255, 255, blue_val)
 
             # 4. Light up neighbors to the right
             for i in range(lit_count):
@@ -251,8 +243,8 @@ class LEDController:
 # SNAPSHOT LOGIC
 # ==============================================================================
 def save_snapshots(counter):
-    # Save to 'Color' folder inside images
-    base_path = os.path.join(IMAGE_FOLDER, 'Color')
+    # Save to 'Color' folder in Repo Root
+    base_path = 'Color'
     
     if not os.path.exists(base_path):
         try: os.makedirs(base_path)
@@ -545,23 +537,37 @@ def main():
         print(f"ERROR: {e}")
         # LCD: Red (255, 0, 0) "Something is // wrong"
         if lcd:
-            lcd.setRGB(255, 0, 0)
-            lcd.clear()
-            lcd.setCursor(0,0); lcd.print("Something is")
-            lcd.setCursor(0,1); lcd.print("wrong")
+            try:
+                lcd.setRGB(255, 0, 0)
+                lcd.clear()
+                lcd.setCursor(0,0); lcd.print("Something is")
+                lcd.setCursor(0,1); lcd.print("wrong")
+            except: pass
         time.sleep(10)
 
     finally:
         # CLEANUP
+        print("Cleaning up...")
         led_ctrl.stop()
         if servo_ctrl: servo_ctrl.stop()
+        
+        # Stop Cameras FIRST to release resources
         for cam in active_cameras.values(): cam.stop()
+        
+        # Close Window
+        try:
+            cv2.destroyAllWindows()
+            for _ in range(5): cv2.waitKey(1)
+        except: pass
+        
+        # Finally Clear LCD
         if lcd: 
             try: lcd.clear(); lcd.setRGB(0,0,0)
             except: pass
-        try: cv2.destroyAllWindows()
-        except: pass
+            
         print("Exited.")
+        # Force Exit to prevent hanging threads causing segfaults
+        os._exit(0)
 
 if __name__ == "__main__":
     main()
