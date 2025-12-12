@@ -256,20 +256,47 @@ def save_snapshots(counter):
         frame = cam.get_frame()
         if frame is not None:
             filename = ""
+            h, w = frame.shape[:2]
+            
+            # ------------------------------------------------------------------
+            # CROPPING LOGIC
+            # ------------------------------------------------------------------
             if "USB" in name:
+                # Crop Upper 30%, Left 15%, Right 15%
+                # Result: y[0.3h : h], x[0.15w : 0.85w]
+                y_start = int(0.3 * h)
+                x_start = int(0.15 * w)
+                x_end = int(0.85 * w)
+                frame = frame[y_start:h, x_start:x_end]
+                
                 idx = name.split()[-1]
                 filename = f"USB{idx}_{counter}.jpg"
+                
             elif "CSI" in name:
                 idx = name.split()[-1]
-                if idx == "0": filename = f"CSI90_{counter}.jpg"
-                elif idx == "1": filename = f"CSI45_{counter}.jpg"
-                else: filename = f"CSI_Unknown_{counter}.jpg"
+                
+                if idx == "1": # Specific Request for CSI 1
+                    # Crop Lower 30%, Left 10%, Right 10%
+                    # Result: y[0 : 0.7h], x[0.1w : 0.9w]
+                    y_end = int(0.7 * h)
+                    x_start = int(0.1 * w)
+                    x_end = int(0.9 * w)
+                    frame = frame[0:y_end, x_start:x_end]
+                    filename = f"CSI45_{counter}.jpg"
+                    
+                elif idx == "0": 
+                    # No Crop for CSI 0
+                    filename = f"CSI90_{counter}.jpg"
+                else: 
+                    filename = f"CSI_Unknown_{counter}.jpg"
             
-            full_path = os.path.join(base_path, filename)
-            try:
-                cv2.imwrite(full_path, frame)
-            except Exception as e:
-                print(f"    Failed to save {filename}: {e}")
+            # Save
+            if filename:
+                full_path = os.path.join(base_path, filename)
+                try:
+                    cv2.imwrite(full_path, frame)
+                except Exception as e:
+                    print(f"    Failed to save {filename}: {e}")
 
 # ==============================================================================
 # SERVO CONTROLLER (10-Step Random)
