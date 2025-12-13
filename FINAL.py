@@ -305,7 +305,12 @@ class ServoController:
     def __init__(self, kit):
         self.kit = kit
         self.running = False
+        self.stop_requested = False
         self.thread = None
+        
+    def request_stop(self):
+        """Signals the controller to stop after the current step completes."""
+        self.stop_requested = True
         
     def start(self):
         if self.running: return
@@ -326,6 +331,7 @@ class ServoController:
         # 10 Steps
         for i in range(1, 11):
             if not self.running: break
+            if self.stop_requested: break # Stop before starting new step
             
             # TRIGGER LED CHANGE START OF MOVE
             led_update_event.set()
@@ -357,7 +363,12 @@ class ServoController:
             
             # STOPPED
             if not self.running: break
+            if self.stop_requested: break # Stop after move
+            
             time.sleep(1.5)
+            
+            if not self.running: break
+            if self.stop_requested: break # Stop after sleep
             
             if not self.running: break
             save_snapshots(i)
@@ -366,7 +377,8 @@ class ServoController:
             time.sleep(0.5)
         
         # End of sequence
-        if self.running:
+        # Only return to 0 if we finished normally (NOT stopped early)
+        if self.running and not self.stop_requested:
             print("  [Servo] Sequence Done. Returning to 0.")
             self._move_to(servo, 0, SPEED)
             
@@ -505,7 +517,12 @@ def main():
             lcd.setCursor(0,0); lcd.print("Running...")
         
         led_ctrl.start()
-        if servo_ctrl: servo_ctrl.start()
+        if servo_ctrl: 
+            servo_ctrl.start()
+            # Feature: Stop on Button Press during Phase 2
+            # Use 'when_pressed' callback which runs in a thread.
+            # It signals the servo controller to stop gracefully.
+            button.when_pressed = lambda: servo_ctrl.request_stop()
         
         # Slideshow Loop (Blocking Main Thread while Servo runs)
         current_img_idx = 0
@@ -514,8 +531,13 @@ def main():
         
         while True:
             # Check if servo finished
+            # Check if servo finished
             if servo_ctrl and not servo_ctrl.running:
                 # Sequence done
+                break
+            
+            # Also break if stop requested (redundant but safe)
+            if servo_ctrl and servo_ctrl.stop_requested:
                 break
                 
             # Slideshow
@@ -567,6 +589,11 @@ def main():
         # Wait 5 seconds to let user see "Finished" and Git to complete if lagging
         time.sleep(5)
 
+        time.sleep(5)
+            
+    except KeyboardInterrupt:
+        print("\n[User] Ctrl+C Caught. Exiting...")
+
     except Exception as e:
         print(f"ERROR: {e}")
         # LCD: Red (255, 0, 0) "Something is // wrong"
@@ -584,6 +611,21 @@ def main():
         print("Final Cleanup...")
         try: led_ctrl.stop()
         except: pass
+        
+        # ----------------------------------------------------
+        # FORCE LEDS OFF (Robust Method)
+        # ----------------------------------------------------
+        try:
+            print("  -> Forcing LEDs OFF...")
+            # Re-init simply to flush buffer
+            p1 = neopixel.NeoPixel(LED_PIN_1, LED_COUNT_1, auto_write=False)
+            p1.fill((0,0,0)); p1.show()
+            
+            p2 = neopixel.NeoPixel(LED_PIN_2, LED_COUNT_2, auto_write=False)
+            p2.fill((0,0,0)); p2.show()
+        except Exception as e:
+            print(f"  -> LED Force Off Failed: {e}")
+        # ----------------------------------------------------
         
         if servo_ctrl: 
             try: servo_ctrl.stop()
