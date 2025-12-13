@@ -305,6 +305,7 @@ class ServoController:
     def __init__(self, kit):
         self.kit = kit
         self.running = False
+        self.paused = False
         self.stop_requested = False
         self.thread = None
         
@@ -312,6 +313,10 @@ class ServoController:
         """Signals the controller to stop after the current step completes."""
         self.stop_requested = True
         
+    def toggle_pause(self):
+        self.paused = not self.paused
+        print(f"  [Control] Paused: {self.paused}")
+
     def start(self):
         if self.running: return
         self.running = True
@@ -331,6 +336,12 @@ class ServoController:
         # 10 Steps
         for i in range(1, 11):
             if not self.running: break
+            
+            # PAUSE CHECK (Before Move)
+            while self.paused and self.running:
+                time.sleep(0.1)
+            if not self.running: break
+            
             if self.stop_requested: break # Stop before starting new step
             
             # TRIGGER LED CHANGE START OF MOVE
@@ -363,22 +374,31 @@ class ServoController:
             
             # STOPPED
             if not self.running: break
-            if self.stop_requested: break # Stop after move
+            
+            # PAUSE CHECK (After Move)
+            while self.paused and self.running:
+                time.sleep(0.1)
+            if not self.running: break
             
             time.sleep(1.5)
             
+            # PAUSE CHECK (After Sleep)
+            while self.paused and self.running:
+                time.sleep(0.1)
             if not self.running: break
-            if self.stop_requested: break # Stop after sleep
             
-            if not self.running: break
             save_snapshots(i)
             
+            # PAUSE CHECK (After Snap)
+            while self.paused and self.running:
+                time.sleep(0.1)
             if not self.running: break
+            
             time.sleep(0.5)
         
         # End of sequence
-        # Only return to 0 if we finished normally (NOT stopped early)
-        if self.running and not self.stop_requested:
+        # Only return to 0 if we finished normally
+        if self.running:
             print("  [Servo] Sequence Done. Returning to 0.")
             self._move_to(servo, 0, SPEED)
             
@@ -519,10 +539,8 @@ def main():
         led_ctrl.start()
         if servo_ctrl: 
             servo_ctrl.start()
-            # Feature: Stop on Button Press during Phase 2
-            # Use 'when_pressed' callback which runs in a thread.
-            # It signals the servo controller to stop gracefully.
-            button.when_pressed = lambda: servo_ctrl.request_stop()
+            # Feature: Pause on Button Press during Phase 2
+            button.when_pressed = lambda: servo_ctrl.toggle_pause()
         
         # Slideshow Loop (Blocking Main Thread while Servo runs)
         current_img_idx = 0
@@ -531,16 +549,15 @@ def main():
         
         while True:
             # Check if servo finished
-            # Check if servo finished
             if servo_ctrl and not servo_ctrl.running:
                 # Sequence done
                 break
             
-            # Also break if stop requested (redundant but safe)
-            if servo_ctrl and servo_ctrl.stop_requested:
-                break
+            # Slideshow (SKIP IF PAUSED)
+            if servo_ctrl and servo_ctrl.paused:
+                time.sleep(0.1)
+                continue
                 
-            # Slideshow
             now = time.time()
             if images and (now - last_slide_time > SLIDE_DURATION):
                 img = cv2.imread(images[current_img_idx])
