@@ -126,7 +126,17 @@ def generate_frames(cam_key):
         if frame is None:
             time.sleep(0.1)
             continue
-        ret, buffer = cv2.imencode('.jpg', frame)
+            
+        # Optimize for Web Stream: Resize to max width 640px
+        # This reduces bandwidth significantly for 3 simultaneous streams
+        h, w = frame.shape[:2]
+        if w > 640:
+            scale = 640 / w
+            new_h = int(h * scale)
+            frame = cv2.resize(frame, (640, new_h), interpolation=cv2.INTER_AREA)
+            
+        # Encode with slightly lower quality (80) for speed
+        ret, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
         if not ret: continue
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
