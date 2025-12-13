@@ -141,7 +141,7 @@ def index():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>DAB Camera Stream</title>
+        <title>DCB Camera Stream</title>
         <!-- Google Fonts: Inter -->
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -284,7 +284,7 @@ def index():
     <body>
         <header>
             <div>
-                <h1>DAB Control</h1>
+                <h1>DCB Control</h1>
                 <div class="subtitle">System Online</div>
             </div>
             <div style="font-size:0.8rem; color:var(--text-muted);">
