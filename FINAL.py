@@ -149,108 +149,108 @@ def index():
         
         <style>
             :root {
-                --bg-color: #1a1a1a;
-                --card-bg: #2d2d2d;
-                --text-main: #ffffff;
-                --text-muted: #a0a0a0;
-                --accent: #3b82f6; 
-                --success: #10b981;
+                /* Premium 'Slate' Dark Theme */
+                --bg-color: #0f172a;      /* Slate-900 */
+                --card-bg: #1e293b;       /* Slate-800 */
+                --header-bg: #020617;     /* Slate-950 */
+                --text-main: #f8fafc;     /* Slate-50 */
+                --text-muted: #94a3b8;    /* Slate-400 */
+                --border: #334155;        /* Slate-700 */
+                --accent: #38bdf8;        /* Sky-400 */
+                --success: #22c55e;       /* Green-500 */
             }
             
             body {
-                font-family: 'Inter', sans-serif;
+                font-family: 'Inter', system-ui, -apple-system, sans-serif;
                 background-color: var(--bg-color);
                 color: var(--text-main);
                 margin: 0;
                 padding: 0;
-                min-height: 100vh;
+                height: 100vh;
                 display: flex;
                 flex-direction: column;
-                align-items: center;
+                overflow: hidden; /* Prevent scrolling if possible */
             }
 
             header {
-                width: 100%;
-                background-color: #000000;
-                padding: 20px 0;
-                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
-                margin-bottom: 40px;
-                text-align: center;
-                border-bottom: 1px solid #333;
+                background-color: var(--header-bg);
+                padding: 15px 20px;
+                border-bottom: 1px solid var(--border);
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                flex-shrink: 0;
             }
 
             h1 {
                 margin: 0;
-                font-weight: 700;
-                font-size: 1.8rem;
-                letter-spacing: -0.02em;
+                font-size: 1.25rem;
+                font-weight: 600;
+                color: var(--text-main);
             }
             
             .subtitle {
                 color: var(--text-muted);
-                font-size: 0.9rem;
-                margin-top: 5px;
+                font-size: 0.85rem;
             }
 
-            .container {
-                max-width: 1400px;
-                width: 95%;
+            .main-content {
+                flex: 1;
                 display: flex;
-                flex-wrap: wrap;
+                align-items: center;
                 justify-content: center;
-                gap: 30px;
-                padding-bottom: 50px;
+                padding: 20px;
+                width: 100%;
+                box-sizing: border-box;
+            }
+
+            .grid-container {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 20px;
+                width: 100%;
+                max-width: 1800px;
+                /* Ensure it tries to fit in one row if logical */
+                grid-auto-flow: column; 
             }
 
             .card {
                 background-color: var(--card-bg);
-                border-radius: 12px;
+                border: 1px solid var(--border);
+                border-radius: 8px;
                 overflow: hidden;
-                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-                transition: transform 0.2s ease, box-shadow 0.2s ease;
                 display: flex;
                 flex-direction: column;
-                width: 100%;
-                max-width: 600px;
-                border: 1px solid #404040;
-            }
-
-            .card:hover {
-                transform: translateY(-5px);
-                box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
-                border-color: var(--accent);
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
             }
 
             .card-header {
-                padding: 15px 20px;
-                border-bottom: 1px solid #404040;
+                padding: 10px 15px;
+                background: rgba(0, 0, 0, 0.2);
+                border-bottom: 1px solid var(--border);
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                background: rgba(255, 255, 255, 0.02);
             }
 
             .card-title {
+                font-size: 0.95rem;
                 font-weight: 600;
-                font-size: 1.1rem;
-                color: var(--text-main);
                 display: flex;
                 align-items: center;
                 gap: 8px;
             }
 
             .status-badge {
-                background-color: rgba(16, 185, 129, 0.2);
+                font-size: 0.7rem;
                 color: var(--success);
-                padding: 4px 8px;
-                border-radius: 9999px;
-                font-size: 0.75rem;
-                font-weight: 600;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
+                background: rgba(34, 197, 94, 0.15);
+                padding: 2px 6px;
+                border-radius: 4px;
                 display: flex;
                 align-items: center;
                 gap: 4px;
+                font-weight: 600;
             }
             
             .status-dot {
@@ -258,68 +258,58 @@ def index():
                 height: 6px;
                 background-color: var(--success);
                 border-radius: 50%;
-                box-shadow: 0 0 8px var(--success);
+                box-shadow: 0 0 6px var(--success);
             }
 
             .card-body {
-                padding: 0;
                 background: #000;
                 position: relative;
-                aspect-ratio: 4/3; /* Enforce aspect ratio */
-                display: flex;
-                align-items: center;
-                justify-content: center;
+                width: 100%;
+                /* Aspect Ratio Hack to keep it tight but responsive */
+                height: 0;
+                padding-bottom: 60%; /* Taller than 16:9 to fit better or shorter? 16:9 = 56.25% */
             }
 
-            img {
+            .card-body img {
+                position: absolute;
+                top: 0;
+                left: 0;
                 width: 100%;
                 height: 100%;
-                object-fit: contain; /* Ensure image fits without stretch */
-                display: block;
+                object-fit: contain;
             }
             
-            .footer {
-                margin-top: auto;
-                padding: 20px;
-                color: var(--text-muted);
-                font-size: 0.8rem;
-            }
-
         </style>
     </head>
     <body>
         <header>
-            <h1>DAB Control Center</h1>
-            <div class="subtitle">Live Camera Feeds & System Status</div>
+            <div>
+                <h1>DAB Control</h1>
+                <div class="subtitle">System Online</div>
+            </div>
+            <div style="font-size:0.8rem; color:var(--text-muted);">
+                Network Stream
+            </div>
         </header>
 
-        <div class="container">
-            {% for key in active_keys %}
-            <div class="card">
-                <div class="card-header">
-                    <div class="card-title">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                        {{ key }}
+        <div class="main-content">
+            <div class="grid-container">
+                {% for key in active_keys %}
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <!-- Icon -->
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2-2z"/><circle cx="12" cy="13" r="4"/></svg>
+                            {{ key }}
+                        </div>
+                        <div class="status-badge"><div class="status-dot"></div> LIVE</div>
                     </div>
-                    <div class="status-badge">
-                        <div class="status-dot"></div> Live
+                    <div class="card-body">
+                        <img src="{{ url_for('video_feed', cam_key=key) }}">
                     </div>
                 </div>
-                <div class="card-body">
-                    <img src="{{ url_for('video_feed', cam_key=key) }}" alt="Live Feed">
-                </div>
+                {% endfor %}
             </div>
-            {% endfor %}
-            
-            {% if not active_keys %}
-            <div style="color: #666; font-size: 1.2rem; margin-top: 50px;">
-                No active cameras detected.
-            </div>
-            {% endif %}
-        </div>
-        
-        <div class="footer">
-            System Online &bull; Local Network Stream
         </div>
     </body>
     </html>
