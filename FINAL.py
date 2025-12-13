@@ -136,19 +136,192 @@ def generate_frames(cam_key):
 def index():
     active_keys = sorted(list(active_cameras.keys()))
     html = """
-    <html>
-        <head><title>DAB Stream</title></head>
-        <body style="background:#222;color:#fff;text-align:center;">
-            <h1>Live Feeds</h1>
-            <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:20px;">
-                {% for key in active_keys %}
-                <div style="background:#333;padding:10px;">
-                    <h3>{{ key }}</h3>
-                    <img src="{{ url_for('video_feed', cam_key=key) }}" style="max-width:400px;">
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>DAB Camera Stream</title>
+        <!-- Google Fonts: Inter -->
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+        
+        <style>
+            :root {
+                --bg-color: #1a1a1a;
+                --card-bg: #2d2d2d;
+                --text-main: #ffffff;
+                --text-muted: #a0a0a0;
+                --accent: #3b82f6; 
+                --success: #10b981;
+            }
+            
+            body {
+                font-family: 'Inter', sans-serif;
+                background-color: var(--bg-color);
+                color: var(--text-main);
+                margin: 0;
+                padding: 0;
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+
+            header {
+                width: 100%;
+                background-color: #000000;
+                padding: 20px 0;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+                margin-bottom: 40px;
+                text-align: center;
+                border-bottom: 1px solid #333;
+            }
+
+            h1 {
+                margin: 0;
+                font-weight: 700;
+                font-size: 1.8rem;
+                letter-spacing: -0.02em;
+            }
+            
+            .subtitle {
+                color: var(--text-muted);
+                font-size: 0.9rem;
+                margin-top: 5px;
+            }
+
+            .container {
+                max-width: 1400px;
+                width: 95%;
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 30px;
+                padding-bottom: 50px;
+            }
+
+            .card {
+                background-color: var(--card-bg);
+                border-radius: 12px;
+                overflow: hidden;
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+                transition: transform 0.2s ease, box-shadow 0.2s ease;
+                display: flex;
+                flex-direction: column;
+                width: 100%;
+                max-width: 600px;
+                border: 1px solid #404040;
+            }
+
+            .card:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
+                border-color: var(--accent);
+            }
+
+            .card-header {
+                padding: 15px 20px;
+                border-bottom: 1px solid #404040;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                background: rgba(255, 255, 255, 0.02);
+            }
+
+            .card-title {
+                font-weight: 600;
+                font-size: 1.1rem;
+                color: var(--text-main);
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .status-badge {
+                background-color: rgba(16, 185, 129, 0.2);
+                color: var(--success);
+                padding: 4px 8px;
+                border-radius: 9999px;
+                font-size: 0.75rem;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                display: flex;
+                align-items: center;
+                gap: 4px;
+            }
+            
+            .status-dot {
+                width: 6px;
+                height: 6px;
+                background-color: var(--success);
+                border-radius: 50%;
+                box-shadow: 0 0 8px var(--success);
+            }
+
+            .card-body {
+                padding: 0;
+                background: #000;
+                position: relative;
+                aspect-ratio: 4/3; /* Enforce aspect ratio */
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            img {
+                width: 100%;
+                height: 100%;
+                object-fit: contain; /* Ensure image fits without stretch */
+                display: block;
+            }
+            
+            .footer {
+                margin-top: auto;
+                padding: 20px;
+                color: var(--text-muted);
+                font-size: 0.8rem;
+            }
+
+        </style>
+    </head>
+    <body>
+        <header>
+            <h1>DAB Control Center</h1>
+            <div class="subtitle">Live Camera Feeds & System Status</div>
+        </header>
+
+        <div class="container">
+            {% for key in active_keys %}
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                        {{ key }}
+                    </div>
+                    <div class="status-badge">
+                        <div class="status-dot"></div> Live
+                    </div>
                 </div>
-                {% endfor %}
+                <div class="card-body">
+                    <img src="{{ url_for('video_feed', cam_key=key) }}" alt="Live Feed">
+                </div>
             </div>
-        </body>
+            {% endfor %}
+            
+            {% if not active_keys %}
+            <div style="color: #666; font-size: 1.2rem; margin-top: 50px;">
+                No active cameras detected.
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="footer">
+            System Online &bull; Local Network Stream
+        </div>
+    </body>
     </html>
     """
     return render_template_string(html, active_keys=active_keys)
