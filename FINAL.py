@@ -498,115 +498,10 @@ def save_snapshots(counter):
 class ServoController:
     def __init__(self, kit):
         self.kit = kit
-        self.running = False
-        self.paused = False
-        self.stop_requested = False
-        self.thread = None
-        
-    def request_stop(self):
-        """Signals the controller to stop after the current step completes."""
-        self.stop_requested = True
-        
-    def toggle_pause(self):
-        self.paused = not self.paused
-        print(f"  [Control] Paused: {self.paused}")
+        self.servo = self.kit.servo[0]
 
-    def start(self):
-        if self.running: return
-        self.running = True
-        self.thread = threading.Thread(target=self._run_sequence, daemon=True)
-        self.thread.start()
-
-    def _run_sequence(self):
-        servo = self.kit.servo[0]
-        SPEED = 180.0 / 5.0 # deg/sec
-        
-        # Init: Go to 0 slowly
-        self._move_to(servo, 0, SPEED)
-        
-        current_angle = 0.0
-        direction = 1 # 1=Up, -1=Down
-        
-        # 10 Steps
-        for i in range(1, 11):
-            if not self.running: break
-            
-            # PAUSE CHECK (Before Move)
-            while self.paused and self.running:
-                time.sleep(0.1)
-            if not self.running: break
-            
-            if self.stop_requested: break # Stop before starting new step
-            
-            # TRIGGER LED CHANGE START OF MOVE
-            led_update_event.set()
-            
-            # Calculate next step
-            step = random.randint(3, 30)
-            
-            # Bounce Logic
-            next_angle = current_angle + (step * direction)
-            if next_angle > 180:
-                diff = next_angle - 180
-                next_angle = 180 - diff # Simple reflection? 
-                direction = -1
-                # Or user simple logic: Re-calc
-                if current_angle > 150: direction = -1
-                next_angle = current_angle - step if direction == -1 else current_angle + step
-                
-            elif next_angle < 0:
-                direction = 1
-                next_angle = current_angle + step
-                
-            # Clamp just in case
-            if next_angle > 180: next_angle = 180
-            if next_angle < 0: next_angle = 0
-            
-            print(f"  [Servo] Step {i}/10: Moving {current_angle:.1f} -> {next_angle:.1f}")
-            self._move_to(servo, next_angle, SPEED)
-            current_angle = next_angle
-            
-            # STOPPED
-            if not self.running: break
-            
-            # PAUSE CHECK (After Move)
-            while self.paused and self.running:
-                time.sleep(0.1)
-            if not self.running: break
-            
-            time.sleep(1.5)
-            
-            # PAUSE CHECK (After Sleep)
-            while self.paused and self.running:
-                time.sleep(0.1)
-            if not self.running: break
-            
-            save_snapshots(i)
-            
-            # PAUSE CHECK (After Snap)
-            while self.paused and self.running:
-                time.sleep(0.1)
-            if not self.running: break
-            
-            time.sleep(0.5)
-        
-        # End of sequence
-        # Only return to 0 if we finished normally
-        if self.running:
-            print("  [Servo] Sequence Done. Returning to 0.")
-            self._move_to(servo, 0, SPEED)
-            
-            # Git Push happens in Main loop after thread join, 
-            # OR we can do it here. 
-            # To avoid threading conflicts, let's signal Main loop via a flag or just do it here.
-            # Doing it here blocks the thread, which is fine.
-            if self.running:
-                git_push_changes()
-        
-        self.running = False # Mark as done
-
-    def _move_to(self, servo, target, speed):
-        start = servo.angle
+    def move_to(self, target, speed):
+        start = self.servo.angle
         if start is None: start = 0
         dist = abs(target - start)
         duration = dist / speed
@@ -617,22 +512,16 @@ class ServoController:
         curr = start
         
         for _ in range(steps):
-            if not self.running: return
             curr += delta
             if curr < 0: curr = 0
             if curr > 180: curr = 180
-            servo.angle = curr
+            self.servo.angle = curr
             time.sleep(0.02)
-        servo.angle = target
+        self.servo.angle = target
 
-    def stop(self):
-        self.running = False
-        if self.thread:
-            self.thread.join()
-            self.thread = None
-    
-    def is_alive(self):
-        return self.thread and self.thread.is_alive()
+    def return_to_zero(self):
+        SPEED = 180.0 / 5.0
+        self.move_to(0, SPEED)
 
 # ==============================================================================
 # MAIN LOGIC
@@ -678,11 +567,10 @@ def main():
     flask_thread.start()
 
     # Images
-    images = []
     if os.path.exists(IMAGE_FOLDER):
         exts = ('.jpg', '.jpeg', '.png', '.bmp')
         images = [os.path.join(IMAGE_FOLDER, f) for f in os.listdir(IMAGE_FOLDER) if f.lower().endswith(exts)]
-        random.shuffle(images)
+        images.sort() # Alphabetical order
 
     if "DISPLAY" not in os.environ: os.environ["DISPLAY"] = ":0"
     window_name = "Slideshow"
@@ -722,7 +610,7 @@ def main():
         print("Button Pressed! Starting...")
 
         # ==========================================
-        # PHASE 2: RUNNING
+        # PHASE 2: SEQUENTIAL WORKFLOW
         # ==========================================
         # LCD: Orange (255, 165, 0) "Running..."
         if lcd:
@@ -731,40 +619,88 @@ def main():
             lcd.setCursor(0,0); lcd.print("Running...")
         
         led_ctrl.start()
-        if servo_ctrl: 
-            servo_ctrl.start()
-            # Feature: Pause on Button Press during Phase 2
-            button.when_pressed = lambda: servo_ctrl.toggle_pause()
         
-        # Slideshow Loop (Blocking Main Thread while Servo runs)
-        current_img_idx = 0
-        last_slide_time = 0
-        SLIDE_DURATION = 3.0
+        # Initial Servo Move to 0
+        if servo_ctrl:
+            servo_ctrl.return_to_zero()
+
+        current_angle = 0.0
+        direction = 1 # 1=Up, -1=Down
+        SPEED = 180.0 / 5.0 # deg/sec
         
-        while True:
-            # Check if servo finished
-            if servo_ctrl and not servo_ctrl.running:
-                # Sequence done
-                break
+        # 10 Steps
+        for step_idx in range(1, 11):
             
-            # Slideshow (SKIP IF PAUSED)
-            if servo_ctrl and servo_ctrl.paused:
-                time.sleep(0.1)
-                continue
+            # 1. Update Background (Alphabetical)
+            if images:
+                # Use modulo if we have fewer images than steps
+                img_idx = (step_idx - 1) % len(images)
+                img_path = images[img_idx]
                 
-            now = time.time()
-            if images and (now - last_slide_time > SLIDE_DURATION):
-                img = cv2.imread(images[current_img_idx])
-                if img is not None:
-                    try:
+                # Show Image
+                try:
+                    raw_img = cv2.imread(img_path)
+                    if raw_img is not None:
                         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
                         cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-                        cv2.imshow(window_name, img)
-                    except: pass
-                current_img_idx = (current_img_idx + 1) % len(images)
-                last_slide_time = now
+                        cv2.imshow(window_name, raw_img)
+                        cv2.waitKey(10)
+                except: pass
             
-            if cv2.waitKey(50) == ord('q'): break
+            print(f"  [Step {step_idx}] Image Updated. Moving Servo...")
+            
+            # 2. Move Servo
+            if servo_ctrl:
+                # Trigger LED change
+                led_update_event.set()
+                
+                # Calculate next angle
+                step_size = random.randint(3, 30)
+                next_angle = current_angle + (step_size * direction)
+                
+                # Bounce Logic
+                if next_angle > 180:
+                    next_angle = 180 - (next_angle - 180)
+                    direction = -1
+                    if current_angle > 150: direction = -1
+                    next_angle = current_angle - step_size if direction == -1 else current_angle + step_size
+                elif next_angle < 0:
+                    direction = 1
+                    next_angle = current_angle + step_size
+                
+                # Clamp
+                next_angle = max(0, min(180, next_angle))
+                
+                servo_ctrl.move_to(next_angle, SPEED)
+                current_angle = next_angle
+                
+            # 3. Take Snapshots
+            print(f"  [Step {step_idx}] Taking Snapshots...")
+            time.sleep(1.0) # Settle time
+            save_snapshots(step_idx)
+            
+            # 4. Wait for Button Press
+            print(f"  [Step {step_idx}] Waiting for Button Press to continue...")
+            if lcd:
+                lcd.setCursor(0,0); lcd.print(f"Step {step_idx} Done   ")
+                lcd.setCursor(0,1); lcd.print("Press -> Next ")
+
+            while not button.is_pressed:
+                # Keep window responsive
+                if cv2.waitKey(50) == ord('q'):
+                    raise KeyboardInterrupt
+            
+            print("  -> Button Pressed. Continuing...")
+            # Wait for release to avoid double-trigger
+            button.wait_for_release()
+            
+        # End of sequence
+        if servo_ctrl:
+            print("  [Servo] Sequence Done. Returning to 0.")
+            servo_ctrl.return_to_zero()
+            
+        # Git Push
+        git_push_changes()
 
         # ==========================================
         # PHASE 3: FINISH & EXIT
