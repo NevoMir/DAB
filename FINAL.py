@@ -138,13 +138,25 @@ def generate_frames(cam_key):
         # Encode with slightly lower quality (80) for speed
         ret, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
         if not ret: continue
+        
+        # DEBUG: Print every 100 frames
+        if hasattr(cam, 'debug_frame_count'):
+            cam.debug_frame_count += 1
+        else:
+            cam.debug_frame_count = 1
+            print(f"[DEBUG] Stream started for {cam_key}. Frame shape: {frame.shape}")
+
+        if cam.debug_frame_count % 100 == 0:
+            print(f"[DEBUG] Stream {cam_key} alive: {cam.debug_frame_count} frames sent")
+
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
-        time.sleep(0.04) 
+        time.sleep(0.03) 
 
 @app.route('/')
 def index():
     active_keys = sorted(list(active_cameras.keys()))
+    print(f"[DEBUG] Index Page Requested. Active Cameras: {active_keys}")
     html = """
     <!DOCTYPE html>
     <html lang="en">
@@ -328,6 +340,7 @@ def index():
 
 @app.route('/video_feed/<cam_key>')
 def video_feed(cam_key):
+    print(f"[DEBUG] Processing video_feed request for key: '{cam_key}'")
     return Response(generate_frames(cam_key),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
