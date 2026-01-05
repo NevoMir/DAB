@@ -612,8 +612,11 @@ def main():
                 cv2.imshow(window_name, img)
                 cv2.waitKey(10)
         
-        # Wait for button
-        button.wait_for_press()
+        # Wait for button with 'q' check
+        while not button.is_pressed:
+            if cv2.waitKey(50) == ord('q'):
+                raise KeyboardInterrupt
+        
         print("Button Pressed! Starting...")
 
         # ==========================================
@@ -744,7 +747,13 @@ def main():
         time.sleep(5)
             
     except KeyboardInterrupt:
-        print("\n[User] Ctrl+C Caught. Exiting...")
+        print("\n[User] Ctrl+C / Quit Caught.")
+        if servo_ctrl:
+            print("  [Servo] Interrupted! Returning to 0 safely...")
+            try:
+                servo_ctrl.return_to_zero()
+            except Exception as e:
+                print(f"  [Error] Return to 0 failed: {e}")
 
     except Exception as e:
         print(f"ERROR: {e}")
