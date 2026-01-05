@@ -569,7 +569,9 @@ def main():
     # Images
     if os.path.exists(IMAGE_FOLDER):
         exts = ('.jpg', '.jpeg', '.png', '.bmp')
-        images = [os.path.join(IMAGE_FOLDER, f) for f in os.listdir(IMAGE_FOLDER) if f.lower().endswith(exts)]
+        # Filter: ends with extension AND does not start with a number
+        images = [os.path.join(IMAGE_FOLDER, f) for f in os.listdir(IMAGE_FOLDER) 
+                  if f.lower().endswith(exts) and not f[0].isdigit()]
         images.sort() # Alphabetical order
 
     if "DISPLAY" not in os.environ: os.environ["DISPLAY"] = ":0"
