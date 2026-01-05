@@ -523,6 +523,13 @@ class ServoController:
         SPEED = 180.0 / 5.0
         self.move_to(0, SPEED)
 
+    def release(self):
+        """Stops sending pulses to the servo, allowing it to move freely."""
+        try:
+            self.servo.angle = None
+            print("  [Servo] Released (Motor free).")
+        except: pass
+
 # ==============================================================================
 # MAIN LOGIC
 # ==============================================================================
@@ -569,9 +576,7 @@ def main():
     # Images
     if os.path.exists(IMAGE_FOLDER):
         exts = ('.jpg', '.jpeg', '.png', '.bmp')
-        # Filter: ends with extension AND does not start with a number
-        images = [os.path.join(IMAGE_FOLDER, f) for f in os.listdir(IMAGE_FOLDER) 
-                  if f.lower().endswith(exts) and not f[0].isdigit()]
+        images = [os.path.join(IMAGE_FOLDER, f) for f in os.listdir(IMAGE_FOLDER) if f.lower().endswith(exts)]
         images.sort() # Alphabetical order
 
     if "DISPLAY" not in os.environ: os.environ["DISPLAY"] = ":0"
@@ -737,8 +742,6 @@ def main():
         
         # Wait 5 seconds to let user see "Finished" and Git to complete if lagging
         time.sleep(5)
-
-        time.sleep(5)
             
     except KeyboardInterrupt:
         print("\n[User] Ctrl+C Caught. Exiting...")
@@ -756,7 +759,16 @@ def main():
         time.sleep(10)
 
     finally:
-        # CLEANUP (Legacy cleanup if not done above)
+        # CLEANUP
+        print("[System] Cleaning up resources...")
+        if servo_ctrl:
+            servo_ctrl.release()
+        
+        # Release cameras
+        for cam in active_cameras.values():
+            cam.stop()
+            
+        cv2.destroyAllWindows()
         print("Final Cleanup...")
         try: led_ctrl.stop()
         except: pass
