@@ -164,12 +164,20 @@ def index():
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>DCB Camera Stream</title>
-        <!-- Google Fonts: Inter -->
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-        
         <style>
+            @font-face {
+                font-family: 'Inter';
+                src: url('/static/fonts/Inter-Regular.woff2') format('woff2');
+                font-weight: 400;
+                font-style: normal;
+            }
+            @font-face {
+                font-family: 'Inter';
+                src: url('/static/fonts/Inter-SemiBold.woff2') format('woff2');
+                font-weight: 600;
+                font-style: normal;
+            }
+            
             :root {
                 /* Premium 'Slate' Dark Theme */
                 --bg-color: #0f172a;      /* Slate-900 */
@@ -666,7 +674,7 @@ def main():
         except: pass
 
     # Flask
-    flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False), daemon=True)
+    flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False, threaded=True), daemon=True)
     flask_thread.start()
 
     # Images
